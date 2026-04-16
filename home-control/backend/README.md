@@ -1,6 +1,7 @@
 # Backend
 
 This backend keeps the Tuya cloud credentials out of the React Native bundle and exposes only the AC routes the app needs.
+It also acts as the local WiZ LAN bridge, so light control runs from the Mac instead of raw UDP from the phone.
 
 ## Setup
 
@@ -30,6 +31,8 @@ npm run backend:dev
 - `GET /api/tuya/remotes`
 - `GET /api/ac/status`
 - `POST /api/ac/scene`
+- `POST /api/wiz/status`
+- `POST /api/wiz/command`
 
 Example scene request:
 
@@ -53,3 +56,19 @@ Wind values:
 - `1` low
 - `2` medium
 - `3` high
+
+Example WiZ status request:
+
+```bash
+curl -X POST http://localhost:8787/api/wiz/status \
+  -H 'Content-Type: application/json' \
+  -d '{"bulbs":[{"id":"left-1","ip":"192.168.29.131"},{"id":"left-2","ip":"192.168.29.180"}]}'
+```
+
+Example WiZ command request:
+
+```bash
+curl -X POST http://localhost:8787/api/wiz/command \
+  -H 'Content-Type: application/json' \
+  -d '{"bulbs":[{"id":"left-1","ip":"192.168.29.131"},{"id":"left-2","ip":"192.168.29.180"}],"params":{"state":true,"r":255,"g":0,"b":0}}'
+```

@@ -1,9 +1,9 @@
-import Slider from '@react-native-community/slider';
 import { StatusBar } from 'expo-status-bar';
-import React, { startTransition, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Modal,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -11,16 +11,17 @@ import {
   Text,
   View,
 } from 'react-native';
+import Slider from '@react-native-community/slider';
 
-import { TUYA_CLOUD } from './config';
+import {
+  BULB_GROUPS,
+  BULBS,
+  TUYA_CLOUD,
+  type BulbConfig,
+  type BulbGroupConfig,
+} from './config';
 import { getAcStatus, sendAcScene, type AcScenePayload, type AcStatus } from './tuyaCloud';
-
-type NoticeTone = 'info' | 'success' | 'error';
-
-type Notice = {
-  tone: NoticeTone;
-  text: string;
-};
+import { getWizStatuses, sendWizCommand, type WizPilotStatus } from './wizCloud';
 
 type ModeValue = 0 | 1 | 2 | 3 | 4;
 type WindValue = 0 | 1 | 2 | 3;
@@ -39,6 +40,21 @@ type Preset = {
   scene: AcScene;
 };
 
+type BulbState = BulbConfig & {
+  isOn: boolean;
+  brightness: number;
+  busy: boolean;
+};
+
+type GroupColorPreset = {
+  id: string;
+  hex: string;
+  name: string;
+  ring: 'outer' | 'inner';
+  angle: number;
+  params: Record<string, unknown>;
+};
+
 const INITIAL_SCENE: AcScene = {
   power: 0,
   mode: 0,
@@ -46,12 +62,14 @@ const INITIAL_SCENE: AcScene = {
   wind: 1,
 };
 
-const MODE_OPTIONS: Array<{ value: ModeValue; label: string; hint: string }> = [
-  { value: 0, label: 'Cool', hint: 'Fast chill' },
-  { value: 1, label: 'Heat', hint: 'Warm room' },
-  { value: 2, label: 'Auto', hint: 'Balanced' },
-  { value: 3, label: 'Fan', hint: 'Air only' },
-  { value: 4, label: 'Dry', hint: 'Humidity cut' },
+const DEFAULT_BULB_BRIGHTNESS = 68;
+
+const MODE_OPTIONS: Array<{ value: ModeValue; label: string }> = [
+  { value: 0, label: 'Cool' },
+  { value: 1, label: 'Heat' },
+  { value: 2, label: 'Auto' },
+  { value: 3, label: 'Fan' },
+  { value: 4, label: 'Dry' },
 ];
 
 const FAN_OPTIONS: Array<{ value: WindValue; label: string }> = [
@@ -64,21 +82,174 @@ const FAN_OPTIONS: Array<{ value: WindValue; label: string }> = [
 const PRESETS: Preset[] = [
   {
     id: 'ice',
-    name: 'Ice Breaker',
+    name: 'Ice',
     accent: '#8bcff2',
     scene: { power: 1, mode: 0, temp: 21, wind: 3 },
   },
   {
-    id: 'evening',
-    name: 'Evening Drift',
+    id: 'daytime',
+    name: 'Day',
     accent: '#ffbe8a',
     scene: { power: 1, mode: 0, temp: 24, wind: 1 },
   },
   {
-    id: 'sleep',
-    name: 'Sleep Air',
+    id: 'night',
+    name: 'Night',
     accent: '#b6bdfc',
-    scene: { power: 1, mode: 0, temp: 26, wind: 0 },
+    scene: { power: 1, mode: 0, temp: 27, wind: 0 },
+  },
+];
+
+const COLOR_BOARD_SIZE = 232;
+const POWER_CORE_SIZE = 104;
+const COLOR_SWATCH_SIZE = 32;
+const OUTER_COLOR_RADIUS = 94;
+const INNER_COLOR_RADIUS = 58;
+
+const GROUP_COLOR_PRESETS: GroupColorPreset[] = [
+  {
+    id: 'rose',
+    name: 'Rose',
+    hex: '#ff5d73',
+    ring: 'outer',
+    angle: -90,
+    params: { state: true, r: 255, g: 93, b: 115 },
+  },
+  {
+    id: 'coral',
+    name: 'Coral',
+    hex: '#ff7a45',
+    ring: 'outer',
+    angle: -60,
+    params: { state: true, r: 255, g: 122, b: 69 },
+  },
+  {
+    id: 'amber',
+    name: 'Amber',
+    hex: '#ffb000',
+    ring: 'outer',
+    angle: -30,
+    params: { state: true, r: 255, g: 176, b: 0 },
+  },
+  {
+    id: 'sun',
+    name: 'Sunlight',
+    hex: '#ffd85a',
+    ring: 'outer',
+    angle: 0,
+    params: { state: true, r: 255, g: 216, b: 90 },
+  },
+  {
+    id: 'lime',
+    name: 'Lime',
+    hex: '#c6f432',
+    ring: 'outer',
+    angle: 30,
+    params: { state: true, r: 198, g: 244, b: 50 },
+  },
+  {
+    id: 'mint',
+    name: 'Mint',
+    hex: '#18e299',
+    ring: 'outer',
+    angle: 60,
+    params: { state: true, r: 24, g: 226, b: 153 },
+  },
+  {
+    id: 'aqua',
+    name: 'Aqua',
+    hex: '#00d9ff',
+    ring: 'outer',
+    angle: 90,
+    params: { state: true, r: 0, g: 217, b: 255 },
+  },
+  {
+    id: 'sky',
+    name: 'Sky Blue',
+    hex: '#4c8dff',
+    ring: 'outer',
+    angle: 120,
+    params: { state: true, r: 76, g: 141, b: 255 },
+  },
+  {
+    id: 'violet',
+    name: 'Violet',
+    hex: '#7269ff',
+    ring: 'outer',
+    angle: 150,
+    params: { state: true, r: 114, g: 105, b: 255 },
+  },
+  {
+    id: 'iris',
+    name: 'Iris',
+    hex: '#a259ff',
+    ring: 'outer',
+    angle: 180,
+    params: { state: true, r: 162, g: 89, b: 255 },
+  },
+  {
+    id: 'pink',
+    name: 'Pink',
+    hex: '#ff61d2',
+    ring: 'outer',
+    angle: 210,
+    params: { state: true, r: 255, g: 97, b: 210 },
+  },
+  {
+    id: 'peach',
+    name: 'Peach',
+    hex: '#ff9478',
+    ring: 'outer',
+    angle: 240,
+    params: { state: true, r: 255, g: 148, b: 120 },
+  },
+  {
+    id: 'warm-white',
+    name: 'Warm White',
+    hex: '#ffd6a1',
+    ring: 'inner',
+    angle: -90,
+    params: { state: true, temp: 2700 },
+  },
+  {
+    id: 'neutral-white',
+    name: 'Neutral',
+    hex: '#fff0d6',
+    ring: 'inner',
+    angle: -18,
+    params: { state: true, temp: 4200 },
+  },
+  {
+    id: 'cool-white',
+    name: 'Cool White',
+    hex: '#e9f6ff',
+    ring: 'inner',
+    angle: 54,
+    params: { state: true, temp: 6500 },
+  },
+  {
+    id: 'seafoam',
+    name: 'Seafoam',
+    hex: '#a7f0d2',
+    ring: 'inner',
+    angle: 126,
+    params: { state: true, r: 167, g: 240, b: 210 },
+  },
+  {
+    id: 'lavender',
+    name: 'Lavender',
+    hex: '#d2c8ff',
+    ring: 'inner',
+    angle: 198,
+    params: { state: true, r: 210, g: 200, b: 255 },
+  },
+  {
+    id: 'blush',
+    name: 'Blush',
+    hex: '#ffc6d8',
+    ring: 'inner',
+    angle: 270,
+    params: { state: true, r: 255, g: 198, b: 216 },
   },
 ];
 
@@ -96,19 +267,15 @@ function parseNumber(value: string | number | undefined, fallback: number) {
 }
 
 function clampMode(value: number): ModeValue {
-  if ([0, 1, 2, 3, 4].includes(value)) {
-    return value as ModeValue;
-  }
-
-  return INITIAL_SCENE.mode;
+  return [0, 1, 2, 3, 4].includes(value) ? (value as ModeValue) : INITIAL_SCENE.mode;
 }
 
 function clampWind(value: number): WindValue {
-  if ([0, 1, 2, 3].includes(value)) {
-    return value as WindValue;
-  }
+  return [0, 1, 2, 3].includes(value) ? (value as WindValue) : INITIAL_SCENE.wind;
+}
 
-  return INITIAL_SCENE.wind;
+function clampTemp(value: number) {
+  return Math.max(16, Math.min(30, Math.round(value)));
 }
 
 function normalizeStatus(status: AcStatus): AcScene {
@@ -122,7 +289,7 @@ function normalizeStatus(status: AcStatus): AcScene {
   return {
     power: rawPower === 1 ? 1 : 0,
     mode: clampMode(parseNumber(status.mode, INITIAL_SCENE.mode)),
-    temp: Math.min(30, Math.max(16, parseNumber(status.temperature ?? status.temp, INITIAL_SCENE.temp))),
+    temp: clampTemp(parseNumber(status.temperature ?? status.temp, INITIAL_SCENE.temp)),
     wind: clampWind(parseNumber(status.fan ?? status.wind, INITIAL_SCENE.wind)),
   };
 }
@@ -153,117 +320,262 @@ function sceneToPayload(scene: AcScene): AcScenePayload {
   };
 }
 
-export default function AppScreen() {
-  const [notice, setNotice] = useState<Notice>({
-    tone: 'info',
-    text: 'Connecting...',
+function createBulbState(bulb: BulbConfig): BulbState {
+  return {
+    ...bulb,
+    isOn: false,
+    brightness: DEFAULT_BULB_BRIGHTNESS,
+    busy: false,
+  };
+}
+
+function clampBrightness(value: number) {
+  return Math.max(10, Math.min(100, Math.round(value)));
+}
+
+function mergeBulbStatuses(current: BulbState[], statuses: WizPilotStatus[]) {
+  const statusById = new Map(statuses.map((status) => [status.id, status]));
+
+  return current.map((bulb) => {
+    const status = statusById.get(bulb.id);
+
+    if (!status) {
+      return { ...bulb, busy: false };
+    }
+
+    return {
+      ...bulb,
+      isOn: status.isOn,
+      brightness:
+        status.brightness === null ? bulb.brightness : clampBrightness(status.brightness),
+      busy: false,
+    };
   });
-  const [draft, setDraft] = useState<AcScene>(INITIAL_SCENE);
-  const [applied, setApplied] = useState<AcScene>(INITIAL_SCENE);
+}
+
+function bulbsForGroup<T extends BulbConfig>(group: BulbGroupConfig, bulbs: T[]): T[] {
+  return bulbs.filter((bulb) => group.bulbIds.includes(bulb.id));
+}
+
+function getColorNodePosition(preset: GroupColorPreset) {
+  const radius = preset.ring === 'outer' ? OUTER_COLOR_RADIUS : INNER_COLOR_RADIUS;
+  const angle = (preset.angle * Math.PI) / 180;
+  const center = COLOR_BOARD_SIZE / 2;
+
+  return {
+    left: center + Math.cos(angle) * radius - COLOR_SWATCH_SIZE / 2,
+    top: center + Math.sin(angle) * radius - COLOR_SWATCH_SIZE / 2,
+  };
+}
+
+export default function AppScreen() {
+  const [ac, setAc] = useState<AcScene>(INITIAL_SCENE);
+  const [acBusy, setAcBusy] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [bulbs, setBulbs] = useState<BulbState[]>(() => BULBS.map(createBulbState));
+  const [selectedGroupColor, setSelectedGroupColor] = useState<Record<string, string>>(() =>
+    Object.fromEntries(BULB_GROUPS.map((group) => [group.id, 'warm-white'])),
+  );
+  const [toast, setToast] = useState<string | null>(null);
   const [showSplash, setShowSplash] = useState(true);
+  const [colorSheetGroupId, setColorSheetGroupId] = useState<string | null>(null);
+  const [sheetBrightness, setSheetBrightness] = useState(DEFAULT_BULB_BRIGHTNESS);
   const splashOpacity = useRef(new Animated.Value(1)).current;
   const splashTranslate = useRef(new Animated.Value(0)).current;
+  const acTempAnim = useRef(new Animated.Value(INITIAL_SCENE.power ? 1 : 0)).current;
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const backendReady = TUYA_CLOUD.backendBaseUrl.startsWith('http');
   const tuyaReady = isTuyaConfigured();
-  const controlsDisabled = !tuyaReady || submitting || loadingStatus;
+  const acDisabled = !tuyaReady || acBusy || loadingStatus;
 
-  function postNotice(tone: NoticeTone, text: string) {
-    startTransition(() => {
-      setNotice({ tone, text });
-    });
+  function showErrorToast(message: string) {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
+
+    setToast(message);
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, 2600);
   }
 
-  async function loadStatus(options?: {
-    announce?: boolean;
-    syncDraft?: boolean;
-    showLoader?: boolean;
-  }) {
-    const announce = options?.announce ?? true;
-    const syncDraft = options?.syncDraft ?? true;
-    const showLoader = options?.showLoader ?? true;
-
+  async function loadStatus(options?: { showLoader?: boolean }) {
     if (!tuyaReady) {
-      postNotice('error', 'Set app/config.ts with the backend URL and Tuya IDs first.');
+      showErrorToast('Set the backend URL first.');
       setLoadingStatus(false);
       return;
     }
 
-    if (showLoader) {
+    if (options?.showLoader ?? true) {
       setLoadingStatus(true);
     }
 
     try {
       const status = await getAcStatus(TUYA_CLOUD.backendBaseUrl);
-      const normalized = normalizeStatus(status);
-      setApplied(normalized);
-
-      if (syncDraft) {
-        setDraft(normalized);
-      }
-
-      if (announce) {
-        postNotice(
-          'success',
-          normalized.power
-            ? `${normalized.temp}° • ${modeLabel(normalized.mode)} • ${windLabel(normalized.wind)}`
-            : 'AC off',
-        );
-      }
+      setAc(normalizeStatus(status));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to reach the backend';
-      postNotice('error', message);
+      showErrorToast(message);
     } finally {
-      if (showLoader) {
+      if (options?.showLoader ?? true) {
         setLoadingStatus(false);
       }
     }
   }
 
-  async function submitScene(nextScene: AcScene, successText: string) {
-    const previousDraft = draft;
-    const previousApplied = applied;
+  async function loadBulbStatus() {
+    if (!backendReady) {
+      return;
+    }
 
-    setDraft(nextScene);
-    setSubmitting(true);
+    try {
+      const statuses = await getWizStatuses(TUYA_CLOUD.backendBaseUrl, BULBS);
+      setBulbs((current) => mergeBulbStatuses(current, statuses));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to reach the lights';
+      showErrorToast(message);
+    }
+  }
+
+  async function syncGroupStatus(group: BulbGroupConfig) {
+    if (!backendReady) {
+      showErrorToast('Set the backend URL first.');
+      return null;
+    }
+
+    try {
+      const statuses = await getWizStatuses(
+        TUYA_CLOUD.backendBaseUrl,
+        bulbsForGroup(group, BULBS),
+      );
+      setBulbs((current) => mergeBulbStatuses(current, statuses));
+      return statuses;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to verify light status';
+      showErrorToast(message);
+      return null;
+    }
+  }
+
+  async function submitAcScene(nextScene: AcScene) {
+    const previous = ac;
+
+    if (sceneEquals(previous, nextScene)) {
+      return;
+    }
+
+    setAc(nextScene);
+    setAcBusy(true);
 
     try {
       const accepted = await sendAcScene(TUYA_CLOUD.backendBaseUrl, sceneToPayload(nextScene));
 
       if (!accepted) {
-        throw new Error('Tuya did not confirm the AC command.');
+        throw new Error('AC command not confirmed.');
       }
-
-      setApplied(nextScene);
-      setDraft(nextScene);
-      postNotice('success', successText);
 
       try {
         const status = await getAcStatus(TUYA_CLOUD.backendBaseUrl);
-        const normalized = normalizeStatus(status);
-        setApplied(normalized);
-        setDraft(normalized);
+        setAc(normalizeStatus(status));
       } catch {
-        // If status refresh lags, keep the optimistic scene.
+        setAc(nextScene);
       }
     } catch (error) {
-      setDraft(previousDraft);
-      setApplied(previousApplied);
+      setAc(previous);
       const message = error instanceof Error ? error.message : 'AC command failed';
-      postNotice('error', message);
+      showErrorToast(message);
     } finally {
-      setSubmitting(false);
+      setAcBusy(false);
     }
   }
+
+  async function runGroupCommand(
+    group: BulbGroupConfig,
+    optimisticUpdate: (bulb: BulbState) => BulbState,
+    params: Record<string, unknown>,
+  ) {
+    if (!backendReady) {
+      showErrorToast('Set the backend URL first.');
+      return false;
+    }
+
+    const snapshot = bulbs.filter((bulb) => group.bulbIds.includes(bulb.id));
+
+    if (!snapshot.length) {
+      return false;
+    }
+
+    setBulbs((current) =>
+      current.map((bulb) =>
+        group.bulbIds.includes(bulb.id) ? { ...optimisticUpdate(bulb), busy: true } : bulb,
+      ),
+    );
+
+    try {
+      const statuses = await sendWizCommand(TUYA_CLOUD.backendBaseUrl, {
+        bulbs: snapshot.map(({ id, name, ip }) => ({ id, name, ip })),
+        params,
+      });
+      setBulbs((current) => mergeBulbStatuses(current, statuses));
+      return true;
+    } catch (error) {
+      setBulbs((current) =>
+        current.map((bulb) => {
+          const original = snapshot.find((entry) => entry.id === bulb.id);
+          return original ? { ...original, busy: false } : bulb;
+        }),
+      );
+      const message = error instanceof Error ? error.message : 'WiZ group command failed';
+      showErrorToast(message);
+      return false;
+    }
+  }
+
+  async function toggleGroupPower(group: BulbGroupConfig) {
+    const statuses = await syncGroupStatus(group);
+
+    if (!statuses) {
+      return;
+    }
+
+    const shouldTurnOn = !statuses.some((status) => status.isOn);
+
+    await runGroupCommand(
+      group,
+      (current) => ({ ...current, isOn: shouldTurnOn }),
+      { state: shouldTurnOn },
+    );
+  }
+
+  function openColorSheet(groupId: string) {
+    const group = BULB_GROUPS.find((g) => g.id === groupId);
+    if (!group) return;
+    const members = bulbsForGroup(group, bulbs);
+    const avg = members.length
+      ? Math.round(members.reduce((s, b) => s + b.brightness, 0) / members.length)
+      : DEFAULT_BULB_BRIGHTNESS;
+    setSheetBrightness(avg);
+    setColorSheetGroupId(groupId);
+  }
+
+  useEffect(() => {
+    Animated.timing(acTempAnim, {
+      toValue: ac.power ? 1 : 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [ac.power]);
 
   useEffect(() => {
     let disposed = false;
 
     async function boot() {
       await Promise.allSettled([
-        loadStatus({ announce: false }),
-        new Promise((resolve) => setTimeout(resolve, 1400)),
+        loadStatus({ showLoader: true }),
+        loadBulbStatus(),
+        new Promise((resolve) => setTimeout(resolve, 1100)),
       ]);
 
       if (disposed) {
@@ -273,12 +585,12 @@ export default function AppScreen() {
       Animated.parallel([
         Animated.timing(splashOpacity, {
           toValue: 0,
-          duration: 420,
+          duration: 380,
           useNativeDriver: true,
         }),
         Animated.timing(splashTranslate, {
           toValue: -18,
-          duration: 420,
+          duration: 380,
           useNativeDriver: true,
         }),
       ]).start(() => {
@@ -292,710 +604,932 @@ export default function AppScreen() {
 
     return () => {
       disposed = true;
+
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+      }
     };
   }, []);
 
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+    <SafeAreaView style={styles.root}>
+      <StatusBar style="light" />
 
-      <View pointerEvents="none" style={styles.backgroundArt}>
-        <View style={[styles.aurora, styles.auroraBlue]} />
-        <View style={[styles.aurora, styles.auroraPeach]} />
-        <View style={[styles.aurora, styles.auroraMint]} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.eyebrow}>ROOM</Text>
-          <Text style={styles.title}>Room AC</Text>
+      {toast ? (
+        <View style={styles.toastWrap} pointerEvents="none">
+          <View style={styles.toast}>
+            <Text style={styles.toastText}>{toast}</Text>
+          </View>
         </View>
+      ) : null}
 
-        <View style={styles.heroCard}>
-          <View style={styles.heroTop}>
-            <View style={styles.heroTextWrap}>
-              <Text style={styles.heroLabel}>Now</Text>
-              <Text style={styles.heroValue}>
-                {applied.power ? `${applied.temp}°` : 'Standby'}
-              </Text>
-              <Text style={styles.heroSubValue}>
-                {applied.power ? `${modeLabel(applied.mode)} • ${windLabel(applied.wind)}` : 'AC off'}
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+
+        {/* ── AC Hero ─────────────────────────────────────────────────── */}
+        <View style={styles.acHero}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.powerBtn,
+              ac.power ? styles.powerBtnOn : styles.powerBtnOff,
+              pressed ? styles.pressed : null,
+              acDisabled ? styles.disabled : null,
+            ]}
+            disabled={acDisabled}
+            onPress={() => submitAcScene({ ...ac, power: ac.power ? 0 : 1 })}
+          >
+            {acBusy ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <Text style={styles.powerBtnIcon}>⏻</Text>
+            )}
+          </Pressable>
+
+          <Animated.View
+            pointerEvents={ac.power ? 'auto' : 'none'}
+            style={[
+              styles.acTempRow,
+              {
+                opacity: acTempAnim,
+                transform: [
+                  {
+                    translateY: acTempAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [14, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <Pressable
+              style={({ pressed }) => [
+                styles.stepBtn,
+                pressed ? styles.pressed : null,
+                acDisabled || ac.temp <= 16 ? styles.disabled : null,
+              ]}
+              disabled={acDisabled || ac.temp <= 16}
+              onPress={() => submitAcScene({ ...ac, power: 1, temp: clampTemp(ac.temp - 1) })}
+            >
+              <Text style={styles.stepBtnText}>−</Text>
+            </Pressable>
+
+            <View style={styles.acTempCenter}>
+              <Text style={styles.acTempValue}>{ac.temp}°</Text>
+              <Text style={styles.acTempSub}>
+                {modeLabel(ac.mode)} · {windLabel(ac.wind)}
               </Text>
             </View>
 
             <Pressable
               style={({ pressed }) => [
-                styles.powerOrb,
-                applied.power ? styles.powerOrbOn : styles.powerOrbOff,
+                styles.stepBtn,
                 pressed ? styles.pressed : null,
-                controlsDisabled ? styles.disabled : null,
+                acDisabled || ac.temp >= 30 ? styles.disabled : null,
               ]}
-              disabled={controlsDisabled}
-              onPress={() =>
-                submitScene(
-                  { ...draft, power: applied.power ? 0 : 1 },
-                  applied.power ? 'AC turned off.' : 'AC turned on.',
-                )
-              }
+              disabled={acDisabled || ac.temp >= 30}
+              onPress={() => submitAcScene({ ...ac, power: 1, temp: clampTemp(ac.temp + 1) })}
             >
-              {submitting ? (
-                <ActivityIndicator size="small" color="#fff8ef" />
-              ) : (
-                <>
-                  <Text style={styles.powerOrbIcon}>{applied.power ? '◎' : '◌'}</Text>
-                  <Text style={styles.powerOrbLabel}>{applied.power ? 'Turn Off' : 'Turn On'}</Text>
-                </>
-              )}
+              <Text style={styles.stepBtnText}>+</Text>
             </Pressable>
-          </View>
-
-          <View style={styles.metricsRow}>
-            <StatPill label="Power" value={applied.power ? 'On' : 'Off'} />
-            <StatPill label="Mode" value={modeLabel(applied.mode)} />
-            <StatPill label="Fan" value={windLabel(applied.wind)} />
-          </View>
+          </Animated.View>
         </View>
 
-        <NoticeBanner tone={notice.tone} text={notice.text} />
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Presets</Text>
-        </View>
-
+        {/* ── Presets ──────────────────────────────────────────────────── */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.presetRail}
+          style={styles.presetScroll}
         >
           {PRESETS.map((preset) => (
             <Pressable
               key={preset.id}
               style={({ pressed }) => [
-                styles.presetCard,
-                { borderColor: preset.accent },
+                styles.presetPill,
                 pressed ? styles.pressed : null,
-                controlsDisabled ? styles.disabled : null,
+                acDisabled ? styles.disabled : null,
               ]}
-              disabled={controlsDisabled}
-              onPress={() => submitScene(preset.scene, `${preset.name} sent to the AC.`)}
+              disabled={acDisabled}
+              onPress={() => submitAcScene(preset.scene)}
             >
-              <View style={[styles.presetAccent, { backgroundColor: preset.accent }]} />
-              <Text style={styles.presetTitle}>{preset.name}</Text>
-              <Text style={styles.presetMeta}>
-                {preset.scene.temp}° • {modeLabel(preset.scene.mode)} • {windLabel(preset.scene.wind)}
-              </Text>
+              <View style={[styles.presetDot, { backgroundColor: preset.accent }]} />
+              <View>
+                <Text style={styles.presetName}>{preset.name}</Text>
+                <Text style={styles.presetMeta}>
+                  {preset.scene.temp}° · {modeLabel(preset.scene.mode)}
+                </Text>
+              </View>
             </Pressable>
           ))}
         </ScrollView>
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Controls</Text>
+        {/* ── Mode ──────────────────────────────────────────────────────── */}
+        <View style={styles.pillCard}>
+          <View style={styles.pillCardHeader}>
+            <Text style={styles.pillSectionLabel}>Mode</Text>
+            <Text style={styles.pillCardValue}>{modeLabel(ac.mode)}</Text>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.pillRail}
+          >
+            {MODE_OPTIONS.map((opt) => {
+              const active = ac.mode === opt.value;
+              return (
+                <Pressable
+                  key={opt.value}
+                  style={({ pressed }) => [
+                    styles.pill,
+                    active ? styles.pillActive : null,
+                    pressed ? styles.pressed : null,
+                    acDisabled ? styles.disabled : null,
+                  ]}
+                  disabled={acDisabled}
+                  onPress={() => submitAcScene({ ...ac, power: 1, mode: opt.value })}
+                >
+                  <Text style={[styles.pillText, active ? styles.pillTextActive : null]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         </View>
 
-        <View style={styles.controlCard}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardTitle}>Temperature</Text>
-            <Text style={styles.cardValue}>{draft.temp}°C</Text>
+        {/* ── Fan speed ─────────────────────────────────────────────────── */}
+        <View style={styles.pillCard}>
+          <View style={styles.pillCardHeader}>
+            <Text style={styles.pillSectionLabel}>Fan</Text>
+            <Text style={styles.pillCardValue}>{windLabel(ac.wind)}</Text>
           </View>
-          <Slider
-            minimumValue={16}
-            maximumValue={30}
-            step={1}
-            value={draft.temp}
-            minimumTrackTintColor="#ff9b6a"
-            maximumTrackTintColor="#e4d8cb"
-            thumbTintColor="#fff9f0"
-            disabled={controlsDisabled}
-            onValueChange={(value) =>
-              setDraft((current) => ({
-                ...current,
-                temp: Math.round(value),
-              }))
-            }
-            onSlidingComplete={(value) => {
-              const nextScene = {
-                ...draft,
-                power: 1,
-                temp: Math.round(value),
-              };
-
-              if (sceneEquals(nextScene, applied)) {
-                return;
-              }
-
-              submitScene(nextScene, `${nextScene.temp}° sent.`);
-            }}
-          />
-          <View style={styles.sliderLabels}>
-            <Text style={styles.sliderLabel}>16°</Text>
-            <Text style={styles.sliderLabel}>30°</Text>
-          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.pillRail}
+          >
+            {FAN_OPTIONS.map((opt) => {
+              const active = ac.wind === opt.value;
+              return (
+                <Pressable
+                  key={opt.value}
+                  style={({ pressed }) => [
+                    styles.pill,
+                    active ? styles.pillActive : null,
+                    pressed ? styles.pressed : null,
+                    acDisabled ? styles.disabled : null,
+                  ]}
+                  disabled={acDisabled}
+                  onPress={() => submitAcScene({ ...ac, power: 1, wind: opt.value })}
+                >
+                  <Text style={[styles.pillText, active ? styles.pillTextActive : null]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         </View>
 
-        <View style={styles.controlCard}>
-          <Text style={styles.cardTitle}>Mode</Text>
-          <View style={styles.chipGrid}>
-            {MODE_OPTIONS.map((option) => {
-              const active = draft.mode === option.value;
+        {/* ── Lights ────────────────────────────────────────────────────── */}
+        <View style={styles.lightsSection}>
+          <View style={styles.lightsSectionHeader}>
+            <Text style={styles.pillSectionLabel}>Lights</Text>
+            <Pressable
+              style={({ pressed }) => [
+                styles.allLightsBtn,
+                pressed ? styles.pressed : null,
+                !backendReady || bulbs.some((b) => b.busy) ? styles.disabled : null,
+              ]}
+              disabled={!backendReady || bulbs.some((b) => b.busy)}
+              onPress={() => void Promise.all(BULB_GROUPS.map((g) => toggleGroupPower(g)))}
+            >
+              <Text
+                style={[
+                  styles.allLightsBtnText,
+                  bulbs.some((b) => b.isOn) ? styles.allLightsBtnTextOn : null,
+                ]}
+              >
+                {bulbs.some((b) => b.isOn) ? 'All Off' : 'All On'}
+              </Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.lightGrid}>
+            {BULB_GROUPS.map((group) => {
+              const members = bulbsForGroup(group, bulbs);
+              const anyOn = members.some((b) => b.isOn);
+              const groupBusy = members.some((b) => b.busy);
+              const activeColorId = selectedGroupColor[group.id] ?? 'warm-white';
+              const activePreset = GROUP_COLOR_PRESETS.find((p) => p.id === activeColorId);
+              const avgBrightness = members.length
+                ? Math.round(members.reduce((s, b) => s + b.brightness, 0) / members.length)
+                : DEFAULT_BULB_BRIGHTNESS;
 
               return (
                 <Pressable
-                  key={option.value}
+                  key={group.id}
                   style={({ pressed }) => [
-                    styles.modeChip,
-                    active ? styles.modeChipActive : null,
-                    pressed ? styles.pressed : null,
-                    controlsDisabled ? styles.disabled : null,
+                    styles.lightTile,
+                    anyOn ? styles.lightTileOn : styles.lightTileOff,
+                    pressed ? styles.lightTilePressed : null,
+                    groupBusy || !backendReady ? styles.disabled : null,
                   ]}
-                  disabled={controlsDisabled}
-                  onPress={() => {
-                    const nextScene = {
-                      ...draft,
-                      power: 1,
-                      mode: option.value,
-                    };
-
-                    if (sceneEquals(nextScene, applied)) {
-                      return;
-                    }
-
-                    submitScene(nextScene, `${option.label} mode.`);
-                  }}
+                  onPress={() => void toggleGroupPower(group)}
+                  onLongPress={() => openColorSheet(group.id)}
+                  delayLongPress={380}
+                  disabled={groupBusy || !backendReady}
                 >
-                  <Text style={[styles.modeChipLabel, active ? styles.modeChipLabelActive : null]}>
-                    {option.label}
-                  </Text>
+                  {groupBusy ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={anyOn ? '#ff9f0a' : '#48484a'}
+                      style={styles.lightTileSpinner}
+                    />
+                  ) : (
+                    <>
+                      <View style={styles.lightTileTop}>
+                        <View
+                          style={[
+                            styles.lightTileDot,
+                            anyOn
+                              ? {
+                                  backgroundColor: activePreset?.hex ?? '#ffcc70',
+                                  shadowColor: activePreset?.hex ?? '#ffcc70',
+                                  shadowOpacity: 0.85,
+                                  shadowRadius: 14,
+                                  shadowOffset: { width: 0, height: 0 },
+                                }
+                              : styles.lightTileDotOff,
+                          ]}
+                        />
+                      </View>
+                      <Text style={[styles.lightTileName, anyOn ? styles.lightTileNameOn : null]}>
+                        {group.name}
+                      </Text>
+                      <Text style={styles.lightTileStatus}>
+                        {anyOn ? `${avgBrightness}%` : 'Off'}
+                      </Text>
+                    </>
+                  )}
                 </Pressable>
               );
             })}
           </View>
         </View>
 
-        <View style={styles.controlCard}>
-          <Text style={styles.cardTitle}>Fan speed</Text>
-          <View style={styles.fanRow}>
-            {FAN_OPTIONS.map((option) => {
-              const active = draft.wind === option.value;
-
-              return (
-                <Pressable
-                  key={option.value}
-                  style={({ pressed }) => [
-                    styles.fanChip,
-                    active ? styles.fanChipActive : null,
-                    pressed ? styles.pressed : null,
-                    controlsDisabled ? styles.disabled : null,
-                  ]}
-                  disabled={controlsDisabled}
-                  onPress={() => {
-                    const nextScene = {
-                      ...draft,
-                      power: 1,
-                      wind: option.value,
-                    };
-
-                    if (sceneEquals(nextScene, applied)) {
-                      return;
-                    }
-
-                    submitScene(nextScene, `${option.label} fan.`);
-                  }}
-                >
-                  <Text style={[styles.fanChipLabel, active ? styles.fanChipLabelActive : null]}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
       </ScrollView>
 
+      {/* ── Colour sheet ──────────────────────────────────────────────── */}
+      {(() => {
+        const sheetGroup = BULB_GROUPS.find((g) => g.id === colorSheetGroupId) ?? null;
+        if (!sheetGroup) return null;
+
+        const sheetMembers = bulbsForGroup(sheetGroup, bulbs);
+        const sheetGroupBusy = sheetMembers.some((b) => b.busy);
+        const sheetActiveColorId = selectedGroupColor[sheetGroup.id] ?? 'warm-white';
+
+        const VIVID_COLORS = GROUP_COLOR_PRESETS.filter((p) => p.ring === 'outer');
+        const WHITE_COLORS = GROUP_COLOR_PRESETS.filter(
+          (p) => p.ring === 'inner' && p.id.includes('white'),
+        );
+        const SOFT_COLORS = GROUP_COLOR_PRESETS.filter(
+          (p) => p.ring === 'inner' && !p.id.includes('white'),
+        );
+
+        async function applyPreset(preset: GroupColorPreset) {
+          const ok = await runGroupCommand(
+            sheetGroup!,
+            (b) => ({ ...b, isOn: true }),
+            { dimming: clampBrightness(sheetBrightness), ...preset.params },
+          );
+          if (ok) {
+            setSelectedGroupColor((c) => ({ ...c, [sheetGroup!.id]: preset.id }));
+          }
+        }
+
+        return (
+          <Modal
+            visible={colorSheetGroupId !== null}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setColorSheetGroupId(null)}
+          >
+            <Pressable
+              style={styles.sheetOverlay}
+              onPress={() => setColorSheetGroupId(null)}
+            />
+            <View style={styles.sheet}>
+              <View style={styles.sheetHandle} />
+
+              <View style={styles.sheetHeader}>
+                <Text style={styles.sheetTitle}>{sheetGroup.name}</Text>
+                <Pressable
+                  onPress={() => setColorSheetGroupId(null)}
+                  style={styles.sheetClose}
+                  hitSlop={12}
+                >
+                  <Text style={styles.sheetCloseText}>Done</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.sheetSection}>
+                <View style={styles.sheetSectionHeader}>
+                  <Text style={styles.sheetSectionLabel}>Brightness</Text>
+                  <Text style={styles.sheetBrightnessValue}>{sheetBrightness}%</Text>
+                </View>
+                <Slider
+                  style={styles.sheetSlider}
+                  minimumValue={10}
+                  maximumValue={100}
+                  step={1}
+                  value={sheetBrightness}
+                  onValueChange={(v) => setSheetBrightness(Math.round(v))}
+                  onSlidingComplete={(v) =>
+                    void runGroupCommand(
+                      sheetGroup!,
+                      (b) => b,
+                      { dimming: clampBrightness(Math.round(v)) },
+                    )
+                  }
+                  minimumTrackTintColor="#0a84ff"
+                  maximumTrackTintColor="#3a3a3c"
+                  thumbTintColor="#ffffff"
+                  disabled={sheetGroupBusy}
+                />
+              </View>
+
+              <View style={styles.sheetSection}>
+                <Text style={styles.sheetSectionLabel}>Colour</Text>
+                <View style={styles.colorSwatchGrid}>
+                  {VIVID_COLORS.map((preset) => (
+                    <Pressable
+                      key={preset.id}
+                      onPress={() => void applyPreset(preset)}
+                      style={({ pressed }) => [
+                        styles.colorSwatch,
+                        { backgroundColor: preset.hex },
+                        sheetActiveColorId === preset.id ? styles.colorSwatchActive : null,
+                        pressed ? styles.pressed : null,
+                        sheetGroupBusy ? styles.disabled : null,
+                      ]}
+                      disabled={sheetGroupBusy}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.sheetSection}>
+                <Text style={styles.sheetSectionLabel}>White</Text>
+                <View style={styles.colorChipRow}>
+                  {WHITE_COLORS.map((preset) => (
+                    <Pressable
+                      key={preset.id}
+                      onPress={() => void applyPreset(preset)}
+                      style={({ pressed }) => [
+                        styles.colorChip,
+                        sheetActiveColorId === preset.id ? styles.colorChipActive : null,
+                        pressed ? styles.pressed : null,
+                        sheetGroupBusy ? styles.disabled : null,
+                      ]}
+                      disabled={sheetGroupBusy}
+                    >
+                      <View style={[styles.colorChipDot, { backgroundColor: preset.hex }]} />
+                      <Text
+                        style={[
+                          styles.colorChipLabel,
+                          sheetActiveColorId === preset.id ? styles.colorChipLabelActive : null,
+                        ]}
+                      >
+                        {preset.name}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
+              <View style={[styles.sheetSection, styles.sheetSectionLast]}>
+                <Text style={styles.sheetSectionLabel}>Soft</Text>
+                <View style={styles.colorChipRow}>
+                  {SOFT_COLORS.map((preset) => (
+                    <Pressable
+                      key={preset.id}
+                      onPress={() => void applyPreset(preset)}
+                      style={({ pressed }) => [
+                        styles.colorChip,
+                        sheetActiveColorId === preset.id ? styles.colorChipActive : null,
+                        pressed ? styles.pressed : null,
+                        sheetGroupBusy ? styles.disabled : null,
+                      ]}
+                      disabled={sheetGroupBusy}
+                    >
+                      <View style={[styles.colorChipDot, { backgroundColor: preset.hex }]} />
+                      <Text
+                        style={[
+                          styles.colorChipLabel,
+                          sheetActiveColorId === preset.id ? styles.colorChipLabelActive : null,
+                        ]}
+                      >
+                        {preset.name}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            </View>
+          </Modal>
+        );
+      })()}
+
+      {/* ── Splash ────────────────────────────────────────────────────── */}
       {showSplash ? (
         <Animated.View
           style={[
-            styles.splashScreen,
-            {
-              opacity: splashOpacity,
-              transform: [{ translateY: splashTranslate }],
-            },
+            styles.splash,
+            { opacity: splashOpacity, transform: [{ translateY: splashTranslate }] },
           ]}
         >
-          <View style={styles.splashHalo} />
-          <View style={styles.splashCore}>
-            <Text style={styles.splashEyebrow}>ROOM</Text>
-            <Text style={styles.splashTitle}>Climate Deck</Text>
-            <ActivityIndicator size="small" color="#19334a" />
-          </View>
+          <Text style={styles.splashEyebrow}>ROOM</Text>
+          <Text style={styles.splashTitle}>Home</Text>
+          <ActivityIndicator size="small" color="#3a3a3c" style={styles.splashSpinner} />
         </Animated.View>
       ) : null}
     </SafeAreaView>
   );
 }
 
-function StatPill({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.statPill}>
-      <Text style={styles.statPillLabel}>{label}</Text>
-      <Text style={styles.statPillValue}>{value}</Text>
-    </View>
-  );
-}
-
-function NoticeBanner({ tone, text }: Notice) {
-  return (
-    <View
-      style={[
-        styles.noticeBanner,
-        tone === 'success'
-          ? styles.noticeSuccess
-          : tone === 'error'
-            ? styles.noticeError
-            : styles.noticeInfo,
-      ]}
-    >
-      <Text style={styles.noticeText}>{text}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  safeArea: {
+  root: {
     flex: 1,
-    backgroundColor: '#f6eee2',
+    backgroundColor: '#000000',
+    paddingLeft: 0,
+    paddingRight: 0,
+    paddingBottom: 0,
   },
-  backgroundArt: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  aurora: {
+
+  // ── Toast ──────────────────────────────────────────────────────────────────
+  toastWrap: {
     position: 'absolute',
-    borderRadius: 999,
-    opacity: 0.72,
-  },
-  auroraBlue: {
-    width: 280,
-    height: 280,
-    top: -60,
-    right: -80,
-    backgroundColor: '#b9ddf4',
-  },
-  auroraPeach: {
-    width: 250,
-    height: 250,
-    left: -90,
-    top: 180,
-    backgroundColor: '#ffd2af',
-  },
-  auroraMint: {
-    width: 240,
-    height: 240,
-    right: -100,
-    bottom: 110,
-    backgroundColor: '#cfe8d8',
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 36,
-  },
-  header: {
-    marginBottom: 18,
-  },
-  eyebrow: {
-    color: '#607271',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 2.1,
-    marginBottom: 10,
-  },
-  title: {
-    color: '#172935',
-    fontSize: 40,
-    fontWeight: '900',
-    letterSpacing: -1.4,
-  },
-  subtitle: {
-    color: '#506163',
-    fontSize: 15,
-    lineHeight: 22,
-    marginTop: 8,
-    maxWidth: 340,
-  },
-  heroCard: {
-    backgroundColor: '#fff8ef',
-    borderRadius: 30,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#f0dfcd',
-    shadowColor: '#c99c73',
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 5,
-  },
-  heroTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    top: 60,
+    left: 20,
+    right: 20,
+    zIndex: 20,
     alignItems: 'center',
-    gap: 16,
   },
-  heroTextWrap: {
-    flex: 1,
+  toast: {
+    backgroundColor: '#1c1c1e',
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    borderWidth: 1,
+    borderColor: '#ffffff14',
   },
-  heroLabel: {
-    color: '#7c8475',
-    fontSize: 12,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 1.3,
+  toastText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '600',
   },
-  heroValue: {
-    color: '#162834',
-    fontSize: 46,
-    fontWeight: '900',
-    letterSpacing: -1.6,
+
+  // ── Scroll content ─────────────────────────────────────────────────────────
+  scroll: {
+    paddingHorizontal: 10,
+    paddingTop: 12,
+    paddingBottom: 0,
+  },
+
+  // ── Header ────────────────────────────────────────────────────────────────
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 40,
     marginTop: 4,
   },
-  heroSubValue: {
-    color: '#536265',
+  headerLabel: {
+    color: '#ffffff',
     fontSize: 15,
-    lineHeight: 21,
-    marginTop: 6,
-    maxWidth: 190,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
-  powerOrb: {
-    width: 126,
-    height: 126,
-    borderRadius: 999,
+  connDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#2c2c2e',
+  },
+  connDotOnline: {
+    backgroundColor: '#30d158',
+  },
+
+  // ── AC Hero ───────────────────────────────────────────────────────────────
+  acHero: {
+    alignItems: 'center',
+    paddingBottom: 36,
+  },
+  powerBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 14,
+    borderWidth: 1.5,
+    marginBottom: 24,
   },
-  powerOrbOn: {
-    backgroundColor: '#152f3d',
+  powerBtnOff: {
+    backgroundColor: '#ff3b30',
+    borderColor: '#ff3b30',
+    shadowColor: '#ff3b30',
+    shadowOpacity: 0.4,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 0 },
   },
-  powerOrbOff: {
-    backgroundColor: '#e6dbcf',
+  powerBtnOn: {
+    backgroundColor: '#0a84ff',
+    borderColor: '#0a84ff',
+    shadowColor: '#0a84ff',
+    shadowOpacity: 0.55,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 0 },
   },
-  powerOrbIcon: {
-    color: '#fff7ee',
-    fontSize: 34,
-    fontWeight: '300',
-    marginBottom: 4,
+  powerBtnIcon: {
+    color: '#ffffff',
+    fontSize: 22,
+    lineHeight: 26,
   },
-  powerOrbLabel: {
-    color: '#fff7ee',
-    fontSize: 13,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  metricsRow: {
+  acTempRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 18,
+    alignItems: 'center',
+    width: '100%',
   },
-  statPill: {
+  stepBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#2c2c2e',
+  },
+  stepBtnText: {
+    color: '#ffffff',
+    fontSize: 24,
+    fontWeight: '200',
+    lineHeight: 28,
+    marginTop: -2,
+  },
+  acTempCenter: {
     flex: 1,
-    backgroundColor: '#f3eadf',
-    borderRadius: 18,
-    paddingVertical: 13,
-    paddingHorizontal: 12,
+    alignItems: 'center',
   },
-  statPillLabel: {
-    color: '#7a8479',
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  statPillValue: {
-    color: '#1a2f39',
-    fontSize: 18,
-    fontWeight: '800',
-    marginTop: 5,
-  },
-  noticeBanner: {
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginTop: 16,
-  },
-  noticeInfo: {
-    backgroundColor: '#e2e8e4',
-  },
-  noticeSuccess: {
-    backgroundColor: '#ddebd6',
-  },
-  noticeError: {
-    backgroundColor: '#f3d4c6',
-  },
-  noticeText: {
-    color: '#20363f',
-    fontSize: 14,
+  acTempValue: {
+    color: '#ffffff',
+    fontSize: 72,
     fontWeight: '700',
-    lineHeight: 20,
+    letterSpacing: -3,
+    lineHeight: 76,
   },
-  sectionHeader: {
-    marginTop: 24,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    color: '#162834',
-    fontSize: 26,
-    fontWeight: '900',
-    letterSpacing: -0.7,
-  },
-  sectionSubtitle: {
-    color: '#5a6a6d',
+  acTempSub: {
+    color: '#48484a',
     fontSize: 14,
-    lineHeight: 20,
-    marginTop: 5,
+    fontWeight: '400',
+    marginTop: 6,
+    letterSpacing: 0.1,
+  },
+
+  // ── Presets ───────────────────────────────────────────────────────────────
+  presetScroll: {
+    marginHorizontal: -10,
+    marginBottom: 32,
   },
   presetRail: {
+    paddingHorizontal: 10,
+    gap: 10,
+  },
+  presetPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
-    paddingRight: 4,
-  },
-  presetCard: {
-    width: 188,
-    backgroundColor: '#fff8ef',
-    borderRadius: 24,
+    backgroundColor: '#111111',
+    borderRadius: 16,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
     borderWidth: 1,
-    padding: 16,
+    borderColor: '#ffffff08',
+    minWidth: 110,
   },
-  presetAccent: {
-    width: 54,
-    height: 10,
-    borderRadius: 999,
-    marginBottom: 14,
+  presetDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
   },
-  presetTitle: {
-    color: '#172935',
-    fontSize: 19,
-    fontWeight: '900',
-  },
-  presetCaption: {
-    color: '#59696b',
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 7,
+  presetName: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: -0.1,
   },
   presetMeta: {
-    color: '#233946',
+    color: '#48484a',
     fontSize: 12,
-    fontWeight: '800',
-    marginTop: 12,
+    fontWeight: '400',
+    marginTop: 2,
   },
-  controlCard: {
-    backgroundColor: '#fff8ef',
-    borderRadius: 24,
+
+  // ── Pill sections ─────────────────────────────────────────────────────────
+  pillCard: {
+    backgroundColor: '#0d0d0d',
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#f0dfcd',
-    padding: 18,
-    marginBottom: 14,
+    borderColor: '#ffffff08',
+    paddingTop: 16,
+    paddingBottom: 18,
+    marginBottom: 12,
   },
-  cardHeaderRow: {
+  pillCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    paddingHorizontal: 18,
+    marginBottom: 14,
   },
-  cardTitle: {
-    color: '#172935',
-    fontSize: 20,
-    fontWeight: '900',
-  },
-  cardValue: {
-    color: '#ff8650',
-    fontSize: 20,
-    fontWeight: '900',
-  },
-  sliderLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 6,
-  },
-  sliderLabel: {
-    color: '#74827c',
+  pillSectionLabel: {
+    color: '#48484a',
     fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 0.4,
+  },
+  pillCardValue: {
+    color: '#636366',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  pillRail: {
+    gap: 8,
+    paddingHorizontal: 18,
+  },
+  pill: {
+    backgroundColor: '#1c1c1e',
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: '#ffffff08',
+  },
+  pillActive: {
+    backgroundColor: '#ffffff',
+    borderColor: '#ffffff',
+  },
+  pillText: {
+    color: '#636366',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  pillTextActive: {
+    color: '#000000',
     fontWeight: '700',
   },
-  chipGrid: {
+
+  // ── Lights ────────────────────────────────────────────────────────────────
+  lightsSection: {
+    marginTop: 4,
+  },
+  lightsSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  allLightsBtn: {
+    backgroundColor: '#111111',
+    borderRadius: 14,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: '#ffffff08',
+  },
+  allLightsBtnText: {
+    color: '#48484a',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  allLightsBtnTextOn: {
+    color: '#ff9f0a',
+  },
+  lightGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  lightTile: {
+    flex: 1,
+    borderRadius: 22,
+    padding: 18,
+    paddingBottom: 22,
+    minHeight: 148,
+  },
+  lightTileOff: {
+    backgroundColor: '#0d0d0d',
+    borderWidth: 1,
+    borderColor: '#ffffff08',
+  },
+  lightTileOn: {
+    backgroundColor: '#141200',
+    borderWidth: 1,
+    borderColor: '#ffffff10',
+  },
+  lightTilePressed: {
+    opacity: 0.72,
+    transform: [{ scale: 0.96 }],
+  },
+  lightTileSpinner: {
+    marginTop: 32,
+  },
+  lightTileTop: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    marginBottom: 14,
+  },
+  lightTileDot: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+  },
+  lightTileDotOff: {
+    backgroundColor: '#1c1c1e',
+  },
+  lightTileName: {
+    color: '#3a3a3c',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: -0.1,
+    marginBottom: 3,
+  },
+  lightTileNameOn: {
+    color: '#ffffff',
+  },
+  lightTileStatus: {
+    color: '#3a3a3c',
+    fontSize: 13,
+    fontWeight: '400',
+  },
+
+  // ── Colour sheet ──────────────────────────────────────────────────────────
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+  },
+  sheet: {
+    backgroundColor: '#141414',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingBottom: 44,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: '#ffffff10',
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#3a3a3c',
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 6,
+  },
+  sheetTitle: {
+    flex: 1,
+    color: '#ffffff',
+    fontSize: 20,
+    fontWeight: '600',
+    letterSpacing: -0.4,
+  },
+  sheetClose: {
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+  },
+  sheetCloseText: {
+    color: '#0a84ff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  sheetSection: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  sheetSectionLast: {
+    paddingBottom: 4,
+  },
+  sheetSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  sheetSectionLabel: {
+    color: '#48484a',
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1.6,
+    marginBottom: 12,
+  },
+  sheetBrightnessValue: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  sheetSlider: {
+    width: '100%',
+    height: 40,
+    marginTop: -10,
+  },
+  colorSwatchGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
-    marginTop: 12,
   },
-  modeChip: {
-    width: '48%',
-    backgroundColor: '#f5ecdf',
+  colorSwatch: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  colorSwatchActive: {
+    borderColor: '#ffffff',
+    transform: [{ scale: 1.1 }],
+  },
+  colorChipRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  colorChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#1c1c1e',
     borderRadius: 20,
+    paddingVertical: 9,
     paddingHorizontal: 14,
-    paddingVertical: 14,
-  },
-  modeChipActive: {
-    backgroundColor: '#19334a',
-  },
-  modeChipLabel: {
-    color: '#193242',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  modeChipLabelActive: {
-    color: '#fff7ef',
-  },
-  modeChipHint: {
-    color: '#66767b',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  modeChipHintActive: {
-    color: '#bfd2de',
-  },
-  fanRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 12,
-  },
-  fanChip: {
-    flex: 1,
-    backgroundColor: '#f5ecdf',
-    borderRadius: 16,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fanChipActive: {
-    backgroundColor: '#ffb17b',
-  },
-  fanChipLabel: {
-    color: '#1e3540',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  fanChipLabelActive: {
-    color: '#532c14',
-  },
-  actionPanel: {
-    backgroundColor: '#152f3d',
-    borderRadius: 26,
-    padding: 18,
-    marginTop: 4,
-  },
-  actionCopy: {
-    marginBottom: 16,
-  },
-  actionTitle: {
-    color: '#fff8ef',
-    fontSize: 22,
-    fontWeight: '900',
-  },
-  actionSubtitle: {
-    color: '#c6d7da',
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 6,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  secondaryButton: {
-    flex: 1,
-    backgroundColor: '#274657',
-    borderRadius: 18,
-    paddingVertical: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secondaryButtonText: {
-    color: '#d7ebeb',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  primaryButton: {
-    flex: 1.4,
-    backgroundColor: '#ff9b6a',
-    borderRadius: 18,
-    paddingVertical: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonText: {
-    color: '#fff8ef',
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  linkedCard: {
-    backgroundColor: '#fff8ef',
-    borderRadius: 24,
-    padding: 18,
     borderWidth: 1,
-    borderColor: '#f0dfcd',
-    marginTop: 16,
+    borderColor: 'transparent',
   },
-  linkedTitle: {
-    color: '#182b34',
-    fontSize: 20,
-    fontWeight: '900',
-    marginBottom: 8,
+  colorChipActive: {
+    borderColor: '#ffffff22',
+    backgroundColor: '#2c2c2e',
   },
-  linkedMeta: {
-    color: '#607072',
+  colorChipDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  colorChipLabel: {
+    color: '#636366',
     fontSize: 13,
-    lineHeight: 20,
+    fontWeight: '600',
   },
-  splashScreen: {
+  colorChipLabelActive: {
+    color: '#ffffff',
+  },
+
+  // ── Splash ────────────────────────────────────────────────────────────────
+  splash: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#f6eee2',
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  splashHalo: {
-    position: 'absolute',
-    width: 280,
-    height: 280,
-    borderRadius: 999,
-    backgroundColor: '#ffd2af',
-    opacity: 0.9,
-  },
-  splashCore: {
-    width: 280,
-    paddingVertical: 30,
-    paddingHorizontal: 24,
-    borderRadius: 32,
-    backgroundColor: '#fff7ed',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#edd7c0',
-    shadowColor: '#d0a178',
-    shadowOpacity: 0.16,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 6,
   },
   splashEyebrow: {
-    color: '#6d7d78',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 2.3,
-    marginBottom: 10,
+    color: '#2c2c2e',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 3.5,
+    textTransform: 'uppercase',
+    marginBottom: 14,
   },
   splashTitle: {
-    color: '#152f3d',
-    fontSize: 34,
-    fontWeight: '900',
-    letterSpacing: -1,
+    color: '#ffffff',
+    fontSize: 52,
+    fontWeight: '200',
+    letterSpacing: -2.5,
   },
-  splashSubtitle: {
-    color: '#617173',
-    fontSize: 14,
-    marginTop: 8,
-    marginBottom: 18,
+  splashSpinner: {
+    marginTop: 28,
   },
+
   pressed: {
-    opacity: 0.82,
+    opacity: 0.68,
+    transform: [{ scale: 0.97 }],
   },
   disabled: {
-    opacity: 0.45,
+    opacity: 0.32,
   },
 });

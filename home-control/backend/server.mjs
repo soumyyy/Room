@@ -1,4 +1,5 @@
 import { createHash, createHmac, randomUUID } from 'node:crypto';
+import dgram from 'node:dgram';
 import { createServer } from 'node:http';
 
 const config = {
@@ -15,6 +16,9 @@ const tokenCache = {
   value: '',
   expiresAt: 0,
 };
+
+const WIZ_PORT = 38899;
+const WIZ_TIMEOUT_MS = 1500;
 
 function isConfigured() {
   return Boolean(
@@ -109,6 +113,167 @@ function sendNoContent(response) {
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
   });
   response.end();
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isIpv4(value) {
+  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(value);
+}
+
+function normalizeWizBulbs(input) {
+  if (!input || typeof input !== 'object' || !Array.isArray(input.bulbs) || !input.bulbs.length) {
+    throw new Error('bulbs must be a non-empty array');
+  }
+
+  return input.bulbs.map((bulb) => {
+    if (!bulb || typeof bulb !== 'object') {
+      throw new Error('Each bulb must be an object');
+    }
+
+    const id = String(bulb.id ?? '').trim();
+    const ip = String(bulb.ip ?? '').trim();
+
+    if (!id) {
+      throw new Error('Each bulb requires an id');
+    }
+
+    if (!isIpv4(ip)) {
+      throw new Error(`Invalid bulb ip for ${id}`);
+    }
+
+    return { id, ip };
+  });
+}
+
+function normalizeWizParams(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input.params)) {
+    throw new Error('params must be an object');
+  }
+
+  return input.params;
+}
+
+function mapPilotStatus(bulb, result = {}) {
+  return {
+    id: bulb.id,
+    ip: bulb.ip,
+    isOn: Boolean(result.state),
+    brightness: Number.isFinite(Number(result.dimming))
+      ? Number(result.dimming)
+      : null,
+    r: Number.isFinite(Number(result.r)) ? Number(result.r) : null,
+    g: Number.isFinite(Number(result.g)) ? Number(result.g) : null,
+    b: Number.isFinite(Number(result.b)) ? Number(result.b) : null,
+    temp: Number.isFinite(Number(result.temp)) ? Number(result.temp) : null,
+  };
+}
+
+async function sendUdpJson(ip, payload, { expectReply = false } = {}) {
+  return new Promise((resolve, reject) => {
+    const socket = dgram.createSocket('udp4');
+    const rawPayload = Buffer.from(JSON.stringify(payload));
+    let settled = false;
+    let timer = null;
+
+    const finish = (next) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+
+      if (timer) {
+        clearTimeout(timer);
+      }
+
+      try {
+        socket.close();
+      } catch {
+        // ignore close failures
+      }
+
+      next();
+    };
+
+    socket.once('error', (error) => {
+      finish(() => reject(error));
+    });
+
+    if (expectReply) {
+      socket.on('message', (message, remote) => {
+        if (remote.address !== ip) {
+          return;
+        }
+
+        try {
+          const parsed = JSON.parse(message.toString('utf8'));
+          finish(() => resolve(parsed));
+        } catch {
+          finish(() => reject(new Error(`Invalid WiZ response from ${ip}`)));
+        }
+      });
+    }
+
+    socket.bind(0, () => {
+      socket.send(rawPayload, WIZ_PORT, ip, (error) => {
+        if (error) {
+          finish(() => reject(error));
+          return;
+        }
+
+        if (!expectReply) {
+          finish(() => resolve(null));
+          return;
+        }
+
+        timer = setTimeout(() => {
+          finish(() => reject(new Error(`WiZ device ${ip} timed out`)));
+        }, WIZ_TIMEOUT_MS);
+      });
+    });
+  });
+}
+
+async function wizSetPilot(ip, params) {
+  const payload = {
+    method: 'setPilot',
+    params,
+  };
+
+  await sendUdpJson(ip, payload);
+  await sleep(75);
+  await sendUdpJson(ip, payload);
+}
+
+async function wizGetPilot(ip) {
+  const payload = await sendUdpJson(
+    ip,
+    {
+      method: 'getPilot',
+      params: {},
+    },
+    { expectReply: true },
+  );
+
+  if (payload && typeof payload === 'object' && payload.error) {
+    throw new Error(payload.error.message ?? `WiZ device ${ip} rejected the request`);
+  }
+
+  return payload?.result ?? {};
+}
+
+async function readWizStatuses(bulbs) {
+  const results = await Promise.all(
+    bulbs.map(async (bulb) => {
+      const pilot = await wizGetPilot(bulb.ip);
+      return mapPilotStatus(bulb, pilot);
+    }),
+  );
+
+  return results;
 }
 
 async function getAccessToken(forceRefresh = false) {
@@ -274,6 +439,35 @@ async function handleRequest(request, response) {
       });
 
       sendJson(response, 200, { ok: true, result });
+      return;
+    }
+
+    if (url.pathname === '/api/wiz/status' && request.method === 'POST') {
+      const input = await readJsonBody(request);
+      const bulbs = normalizeWizBulbs(input);
+      const result = await readWizStatuses(bulbs);
+
+      sendJson(response, 200, {
+        ok: true,
+        bulbs: result,
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/wiz/command' && request.method === 'POST') {
+      const input = await readJsonBody(request);
+      const bulbs = normalizeWizBulbs(input);
+      const params = normalizeWizParams(input);
+
+      await Promise.all(bulbs.map((bulb) => wizSetPilot(bulb.ip, params)));
+      await sleep(150);
+
+      const result = await readWizStatuses(bulbs);
+
+      sendJson(response, 200, {
+        ok: true,
+        bulbs: result,
+      });
       return;
     }
 
