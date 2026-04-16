@@ -1,0 +1,25 @@
+{
+  "name": "home-control",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "backend": "node --env-file=backend/.env backend/server.mjs",
+    "backend:dev": "node --watch --env-file=backend/.env backend/server.mjs"
+  },
+  "dependencies": {
+    "@react-native-community/slider": "^5.2.0",
+    "buffer": "^6.0.3",
+    "crypto-js": "^4.2.0",
+    "expo": "~54.0.33",
+    "expo-status-bar": "~3.0.9",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-tcp-socket": "^6.4.1",
+    "react-native-udp": "^4.1.7"
+  },
+  "private": true
+}
