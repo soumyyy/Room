@@ -1,19 +1,19 @@
 import Slider from '@react-native-community/slider';
 import { StatusBar } from 'expo-status-bar';
-import React, { startTransition, useState } from 'react';
+import React, { startTransition, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from 'react-native';
 
-import { BULBS, TUYA_CLOUD, type BulbConfig } from './config';
-import { Wiz } from './wiz';
+import { TUYA_CLOUD } from './config';
+import { getAcStatus, sendAcScene, type AcScenePayload, type AcStatus } from './tuyaCloud';
 
 type NoticeTone = 'info' | 'success' | 'error';
 
@@ -22,98 +22,65 @@ type Notice = {
   text: string;
 };
 
-type Scene = {
+type ModeValue = 0 | 1 | 2 | 3 | 4;
+type WindValue = 0 | 1 | 2 | 3;
+
+type AcScene = {
+  power: 0 | 1;
+  mode: ModeValue;
+  temp: number;
+  wind: WindValue;
+};
+
+type Preset = {
   id: string;
   name: string;
-  caption: string;
   accent: string;
-  brightness: number;
-  temperature?: number;
-  color?: {
-    r: number;
-    g: number;
-    b: number;
-  };
+  scene: AcScene;
 };
 
-type BulbState = BulbConfig & {
-  isOn: boolean;
-  brightness: number;
-  temperature: number;
-  accent: string;
-  busy: boolean;
-  lastAction: string;
+const INITIAL_SCENE: AcScene = {
+  power: 0,
+  mode: 0,
+  temp: 24,
+  wind: 1,
 };
 
-const DEFAULT_BRIGHTNESS = 68;
-const DEFAULT_TEMPERATURE = 3000;
-
-const ROOM_SCENES: Scene[] = [
-  {
-    id: 'warm',
-    name: 'Warm',
-    caption: 'Amber light for evenings',
-    accent: '#e98b2a',
-    brightness: 70,
-    temperature: 2700,
-  },
-  {
-    id: 'focus',
-    name: 'Focus',
-    caption: 'Bright neutral light for work',
-    accent: '#4ab0d9',
-    brightness: 100,
-    temperature: 5000,
-  },
-  {
-    id: 'coast',
-    name: 'Coast',
-    caption: 'Cool cyan accent wash',
-    accent: '#1398a7',
-    brightness: 62,
-    color: { r: 50, g: 210, b: 220 },
-  },
-  {
-    id: 'sunset',
-    name: 'Sunset',
-    caption: 'Low coral glow for wind-down',
-    accent: '#d7633f',
-    brightness: 36,
-    color: { r: 255, g: 118, b: 73 },
-  },
+const MODE_OPTIONS: Array<{ value: ModeValue; label: string; hint: string }> = [
+  { value: 0, label: 'Cool', hint: 'Fast chill' },
+  { value: 1, label: 'Heat', hint: 'Warm room' },
+  { value: 2, label: 'Auto', hint: 'Balanced' },
+  { value: 3, label: 'Fan', hint: 'Air only' },
+  { value: 4, label: 'Dry', hint: 'Humidity cut' },
 ];
 
-const BULB_QUICK_ACTIONS = [ROOM_SCENES[0], ROOM_SCENES[1], ROOM_SCENES[3]];
+const FAN_OPTIONS: Array<{ value: WindValue; label: string }> = [
+  { value: 0, label: 'Auto' },
+  { value: 1, label: 'Low' },
+  { value: 2, label: 'Mid' },
+  { value: 3, label: 'High' },
+];
 
-function createInitialBulbState(bulb: BulbConfig): BulbState {
-  return {
-    ...bulb,
-    isOn: false,
-    brightness: DEFAULT_BRIGHTNESS,
-    temperature: DEFAULT_TEMPERATURE,
-    accent: ROOM_SCENES[0].accent,
-    busy: false,
-    lastAction: 'Idle',
-  };
-}
-
-function getScenePilot(scene: Scene) {
-  return {
-    state: true,
-    dimming: scene.brightness,
-    ...(scene.temperature ? { temp: scene.temperature } : {}),
-    ...(scene.color ?? {}),
-  };
-}
-
-function getSceneState(scene: Scene, bulb: BulbState): Partial<BulbState> {
-  return {
-    isOn: true,
-    brightness: scene.brightness,
-    temperature: scene.temperature ?? bulb.temperature,
-    accent: scene.accent,
-  };
-}
+const PRESETS: Preset[] = [
+  {
+    id: 'ice',
+    name: 'Ice Breaker',
+    accent: '#8bcff2',
+    scene: { power: 1, mode: 0, temp: 21, wind: 3 },
+  },
+  {
+    id: 'evening',
+    name: 'Evening Drift',
+    accent: '#ffbe8a',
+    scene: { power: 1, mode: 0, temp: 24, wind: 1 },
+  },
+  {
+    id: 'sleep',
+    name: 'Sleep Air',
+    accent: '#b6bdfc',
+    scene: { power: 1, mode: 0, temp: 26, wind: 0 },
+  },
+];
 
 function isTuyaConfigured() {
   return (
@@ -123,18 +90,84 @@ function isTuyaConfigured() {
   );
 }
 
+function parseNumber(value: string | number | undefined, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function clampMode(value: number): ModeValue {
+  if ([0, 1, 2, 3, 4].includes(value)) {
+    return value as ModeValue;
+  }
+
+  return INITIAL_SCENE.mode;
+}
+
+function clampWind(value: number): WindValue {
+  if ([0, 1, 2, 3].includes(value)) {
+    return value as WindValue;
+  }
+
+  return INITIAL_SCENE.wind;
+}
+
+function normalizeStatus(status: AcStatus): AcScene {
+  const rawPower =
+    status.power_open !== undefined
+      ? status.power_open
+        ? 1
+        : 0
+      : parseNumber(status.power, INITIAL_SCENE.power);
+
+  return {
+    power: rawPower === 1 ? 1 : 0,
+    mode: clampMode(parseNumber(status.mode, INITIAL_SCENE.mode)),
+    temp: Math.min(30, Math.max(16, parseNumber(status.temperature ?? status.temp, INITIAL_SCENE.temp))),
+    wind: clampWind(parseNumber(status.fan ?? status.wind, INITIAL_SCENE.wind)),
+  };
+}
+
+function modeLabel(mode: ModeValue) {
+  return MODE_OPTIONS.find((option) => option.value === mode)?.label ?? 'Cool';
+}
+
+function windLabel(wind: WindValue) {
+  return FAN_OPTIONS.find((option) => option.value === wind)?.label ?? 'Low';
+}
+
+function sceneEquals(left: AcScene, right: AcScene) {
+  return (
+    left.power === right.power &&
+    left.mode === right.mode &&
+    left.temp === right.temp &&
+    left.wind === right.wind
+  );
+}
+
+function sceneToPayload(scene: AcScene): AcScenePayload {
+  return {
+    power: scene.power,
+    mode: scene.mode,
+    temp: scene.temp,
+    wind: scene.wind,
+  };
+}
+
 export default function AppScreen() {
-  const [bulbs, setBulbs] = useState<BulbState[]>(() => BULBS.map(createInitialBulbState));
   const [notice, setNotice] = useState<Notice>({
     tone: 'info',
-    text: 'Ready to send local Wi-Fi commands.',
+    text: 'Connecting...',
   });
-  const [roomBrightness, setRoomBrightness] = useState(DEFAULT_BRIGHTNESS);
+  const [draft, setDraft] = useState<AcScene>(INITIAL_SCENE);
+  const [applied, setApplied] = useState<AcScene>(INITIAL_SCENE);
+  const [loadingStatus, setLoadingStatus] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
+  const splashOpacity = useRef(new Animated.Value(1)).current;
+  const splashTranslate = useRef(new Animated.Value(0)).current;
 
-  const activeLights = bulbs.filter((bulb) => bulb.isOn).length;
-  const busyLights = bulbs.filter((bulb) => bulb.busy).length;
   const tuyaReady = isTuyaConfigured();
-  const roomControlsDisabled = !bulbs.length || busyLights > 0;
+  const controlsDisabled = !tuyaReady || submitting || loadingStatus;
 
   function postNotice(tone: NoticeTone, text: string) {
     startTransition(() => {
@@ -142,449 +175,370 @@ export default function AppScreen() {
     });
   }
 
-  async function runBulbCommand(
-    bulbId: string,
-    actionLabel: string,
-    optimisticUpdate: (bulb: BulbState) => BulbState,
-    command: (bulb: BulbState) => Promise<void>,
-  ) {
-    const previousBulb = bulbs.find((bulb) => bulb.id === bulbId);
+  async function loadStatus(options?: {
+    announce?: boolean;
+    syncDraft?: boolean;
+    showLoader?: boolean;
+  }) {
+    const announce = options?.announce ?? true;
+    const syncDraft = options?.syncDraft ?? true;
+    const showLoader = options?.showLoader ?? true;
 
-    if (!previousBulb) {
+    if (!tuyaReady) {
+      postNotice('error', 'Set app/config.ts with the backend URL and Tuya IDs first.');
+      setLoadingStatus(false);
       return;
     }
 
-    setBulbs((current) =>
-      current.map((bulb) =>
-        bulb.id === bulbId ? { ...optimisticUpdate(bulb), busy: true } : bulb,
-      ),
-    );
+    if (showLoader) {
+      setLoadingStatus(true);
+    }
 
     try {
-      await command(previousBulb);
+      const status = await getAcStatus(TUYA_CLOUD.backendBaseUrl);
+      const normalized = normalizeStatus(status);
+      setApplied(normalized);
 
-      setBulbs((current) =>
-        current.map((bulb) =>
-          bulb.id === bulbId ? { ...bulb, busy: false, lastAction: actionLabel } : bulb,
-        ),
-      );
+      if (syncDraft) {
+        setDraft(normalized);
+      }
 
-      postNotice('success', `${previousBulb.name}: ${actionLabel.toLowerCase()}.`);
+      if (announce) {
+        postNotice(
+          'success',
+          normalized.power
+            ? `${normalized.temp}° • ${modeLabel(normalized.mode)} • ${windLabel(normalized.wind)}`
+            : 'AC off',
+        );
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown transport error';
-
-      setBulbs((current) =>
-        current.map((bulb) =>
-          bulb.id === bulbId
-            ? { ...previousBulb, busy: false, lastAction: 'Retry needed' }
-            : bulb,
-        ),
-      );
-
-      postNotice('error', `${previousBulb.name}: ${message}`);
+      const message = error instanceof Error ? error.message : 'Unable to reach the backend';
+      postNotice('error', message);
+    } finally {
+      if (showLoader) {
+        setLoadingStatus(false);
+      }
     }
   }
 
-  async function runRoomCommand(
-    actionLabel: string,
-    optimisticUpdate: (bulb: BulbState) => BulbState,
-    command: (bulb: BulbState) => Promise<void>,
-  ) {
-    if (!bulbs.length) {
-      postNotice('info', 'Add a bulb in app/config.ts to start controlling the room.');
-      return;
+  async function submitScene(nextScene: AcScene, successText: string) {
+    const previousDraft = draft;
+    const previousApplied = applied;
+
+    setDraft(nextScene);
+    setSubmitting(true);
+
+    try {
+      const accepted = await sendAcScene(TUYA_CLOUD.backendBaseUrl, sceneToPayload(nextScene));
+
+      if (!accepted) {
+        throw new Error('Tuya did not confirm the AC command.');
+      }
+
+      setApplied(nextScene);
+      setDraft(nextScene);
+      postNotice('success', successText);
+
+      try {
+        const status = await getAcStatus(TUYA_CLOUD.backendBaseUrl);
+        const normalized = normalizeStatus(status);
+        setApplied(normalized);
+        setDraft(normalized);
+      } catch {
+        // If status refresh lags, keep the optimistic scene.
+      }
+    } catch (error) {
+      setDraft(previousDraft);
+      setApplied(previousApplied);
+      const message = error instanceof Error ? error.message : 'AC command failed';
+      postNotice('error', message);
+    } finally {
+      setSubmitting(false);
     }
+  }
 
-    const snapshot = bulbs;
+  useEffect(() => {
+    let disposed = false;
 
-    setBulbs((current) => current.map((bulb) => ({ ...optimisticUpdate(bulb), busy: true })));
+    async function boot() {
+      await Promise.allSettled([
+        loadStatus({ announce: false }),
+        new Promise((resolve) => setTimeout(resolve, 1400)),
+      ]);
 
-    const results = await Promise.allSettled(snapshot.map((bulb) => command(bulb)));
-    const failures = results.filter((result) => result.status === 'rejected').length;
+      if (disposed) {
+        return;
+      }
 
-    setBulbs((current) =>
-      current.map((bulb) => {
-        const index = snapshot.findIndex((entry) => entry.id === bulb.id);
-        const result = results[index];
-
-        if (!result || result.status === 'fulfilled') {
-          return { ...bulb, busy: false, lastAction: actionLabel };
+      Animated.parallel([
+        Animated.timing(splashOpacity, {
+          toValue: 0,
+          duration: 420,
+          useNativeDriver: true,
+        }),
+        Animated.timing(splashTranslate, {
+          toValue: -18,
+          duration: 420,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        if (!disposed) {
+          setShowSplash(false);
         }
-
-        return { ...snapshot[index], busy: false, lastAction: 'Retry needed' };
-      }),
-    );
-
-    if (failures === 0) {
-      postNotice('success', `Room: ${actionLabel.toLowerCase()}.`);
-      return;
+      });
     }
 
-    postNotice('error', `Room: ${failures}/${snapshot.length} commands failed.`);
-  }
+    boot();
 
-  async function toggleBulbPower(bulb: BulbState, nextValue: boolean) {
-    await runBulbCommand(
-      bulb.id,
-      nextValue ? 'Powered on' : 'Powered off',
-      (current) => ({ ...current, isOn: nextValue }),
-      (current) => (nextValue ? Wiz.on(current.ip) : Wiz.off(current.ip)),
-    );
-  }
-
-  async function applySceneToBulb(bulb: BulbState, scene: Scene) {
-    await runBulbCommand(
-      bulb.id,
-      `${scene.name} scene`,
-      (current) => ({ ...current, ...getSceneState(scene, current) }),
-      (current) => Wiz.pilot(current.ip, getScenePilot(scene)),
-    );
-  }
-
-  async function setBulbBrightness(bulb: BulbState, value: number) {
-    const rounded = Math.round(value);
-
-    await runBulbCommand(
-      bulb.id,
-      `Brightness ${rounded}%`,
-      (current) => ({
-        ...current,
-        isOn: true,
-        brightness: rounded,
-      }),
-      (current) => Wiz.pilot(current.ip, { state: true, dimming: rounded }),
-    );
-  }
-
-  async function setRoomPower(nextValue: boolean) {
-    await runRoomCommand(
-      nextValue ? 'Room powered on' : 'Room powered off',
-      (bulb) => ({ ...bulb, isOn: nextValue }),
-      (bulb) => (nextValue ? Wiz.on(bulb.ip) : Wiz.off(bulb.ip)),
-    );
-  }
-
-  async function setRoomBrightnessForAll(value: number) {
-    const rounded = Math.round(value);
-    setRoomBrightness(rounded);
-
-    await runRoomCommand(
-      `Room brightness ${rounded}%`,
-      (bulb) => ({ ...bulb, isOn: true, brightness: rounded }),
-      (bulb) => Wiz.pilot(bulb.ip, { state: true, dimming: rounded }),
-    );
-  }
-
-  async function applySceneToRoom(scene: Scene) {
-    await runRoomCommand(
-      `${scene.name} scene`,
-      (bulb) => ({ ...bulb, ...getSceneState(scene, bulb) }),
-      (bulb) => Wiz.pilot(bulb.ip, getScenePilot(scene)),
-    );
-  }
+    return () => {
+      disposed = true;
+    };
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
+
       <View pointerEvents="none" style={styles.backgroundArt}>
-        <View style={[styles.glow, styles.glowAmber]} />
-        <View style={[styles.glow, styles.glowTeal]} />
+        <View style={[styles.aurora, styles.auroraBlue]} />
+        <View style={[styles.aurora, styles.auroraPeach]} />
+        <View style={[styles.aurora, styles.auroraMint]} />
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={styles.eyebrow}>LOCAL FIRST CONTROL</Text>
-          <Text style={styles.title}>Room</Text>
-          <Text style={styles.subtitle}>
-            A control deck for Wi-Fi lights today, with the Tuya IR bridge staged next.
-          </Text>
+          <Text style={styles.eyebrow}>ROOM</Text>
+          <Text style={styles.title}>Room AC</Text>
         </View>
 
         <View style={styles.heroCard}>
-          <View style={styles.heroTopRow}>
-            <View>
-              <Text style={styles.heroLabel}>Session</Text>
-              <Text style={styles.heroValue}>{activeLights}/{bulbs.length} lights live</Text>
+          <View style={styles.heroTop}>
+            <View style={styles.heroTextWrap}>
+              <Text style={styles.heroLabel}>Now</Text>
+              <Text style={styles.heroValue}>
+                {applied.power ? `${applied.temp}°` : 'Standby'}
+              </Text>
+              <Text style={styles.heroSubValue}>
+                {applied.power ? `${modeLabel(applied.mode)} • ${windLabel(applied.wind)}` : 'AC off'}
+              </Text>
             </View>
-            <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>LAN only</Text>
-            </View>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.powerOrb,
+                applied.power ? styles.powerOrbOn : styles.powerOrbOff,
+                pressed ? styles.pressed : null,
+                controlsDisabled ? styles.disabled : null,
+              ]}
+              disabled={controlsDisabled}
+              onPress={() =>
+                submitScene(
+                  { ...draft, power: applied.power ? 0 : 1 },
+                  applied.power ? 'AC turned off.' : 'AC turned on.',
+                )
+              }
+            >
+              {submitting ? (
+                <ActivityIndicator size="small" color="#fff8ef" />
+              ) : (
+                <>
+                  <Text style={styles.powerOrbIcon}>{applied.power ? '◎' : '◌'}</Text>
+                  <Text style={styles.powerOrbLabel}>{applied.power ? 'Turn Off' : 'Turn On'}</Text>
+                </>
+              )}
+            </Pressable>
           </View>
 
-          <View style={styles.metricRow}>
-            <MetricCard label="Configured" value={`${bulbs.length}`} />
-            <MetricCard label="Busy" value={`${busyLights}`} />
-            <MetricCard label="IR bridge" value={tuyaReady ? 'Ready' : 'Setup'} />
+          <View style={styles.metricsRow}>
+            <StatPill label="Power" value={applied.power ? 'On' : 'Off'} />
+            <StatPill label="Mode" value={modeLabel(applied.mode)} />
+            <StatPill label="Fan" value={windLabel(applied.wind)} />
           </View>
-
-          <View style={styles.actionsRow}>
-            <ActionButton
-              label="All on"
-              accent="#e98b2a"
-              onPress={() => setRoomPower(true)}
-              disabled={roomControlsDisabled}
-            />
-            <ActionButton
-              label="All off"
-              accent="#254451"
-              onPress={() => setRoomPower(false)}
-              disabled={roomControlsDisabled}
-            />
-          </View>
-
-          <Text style={styles.sliderTitle}>Whole-room brightness {roomBrightness}%</Text>
-          <Slider
-            minimumValue={5}
-            maximumValue={100}
-            step={1}
-            value={roomBrightness}
-            onValueChange={(value) => setRoomBrightness(Math.round(value))}
-            onSlidingComplete={setRoomBrightnessForAll}
-            minimumTrackTintColor="#e98b2a"
-            maximumTrackTintColor="#385662"
-            thumbTintColor="#fff6e8"
-            disabled={roomControlsDisabled}
-          />
-          <Text style={styles.helperText}>
-            Send commands from a dev build on the same Wi-Fi as the bulbs.
-          </Text>
         </View>
 
         <NoticeBanner tone={notice.tone} text={notice.text} />
 
-        <SectionHeading
-          title="Scene Deck"
-          subtitle="One-tap looks sent to every configured light."
-        />
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Presets</Text>
+        </View>
 
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.sceneRail}
+          contentContainerStyle={styles.presetRail}
         >
-          {ROOM_SCENES.map((scene) => (
-            <SceneCard
-              key={scene.id}
-              scene={scene}
-              onPress={() => applySceneToRoom(scene)}
-              disabled={roomControlsDisabled}
-            />
+          {PRESETS.map((preset) => (
+            <Pressable
+              key={preset.id}
+              style={({ pressed }) => [
+                styles.presetCard,
+                { borderColor: preset.accent },
+                pressed ? styles.pressed : null,
+                controlsDisabled ? styles.disabled : null,
+              ]}
+              disabled={controlsDisabled}
+              onPress={() => submitScene(preset.scene, `${preset.name} sent to the AC.`)}
+            >
+              <View style={[styles.presetAccent, { backgroundColor: preset.accent }]} />
+              <Text style={styles.presetTitle}>{preset.name}</Text>
+              <Text style={styles.presetMeta}>
+                {preset.scene.temp}° • {modeLabel(preset.scene.mode)} • {windLabel(preset.scene.wind)}
+              </Text>
+            </Pressable>
           ))}
         </ScrollView>
 
-        <SectionHeading
-          title="Lights"
-          subtitle="Each bulb keeps its own power state, brightness and quick presets."
-        />
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Controls</Text>
+        </View>
 
-        {bulbs.length ? (
-          bulbs.map((bulb) => (
-            <View key={bulb.id} style={styles.bulbCard}>
-              <View style={styles.bulbHeader}>
-                <View style={styles.bulbTitleWrap}>
-                  <Text style={styles.bulbName}>{bulb.name}</Text>
-                  <Text style={styles.bulbIp}>{bulb.ip}</Text>
-                </View>
-
-                <View style={styles.bulbControls}>
-                  {bulb.busy ? (
-                    <ActivityIndicator size="small" color="#e98b2a" />
-                  ) : (
-                    <View
-                      style={[
-                        styles.powerPill,
-                        bulb.isOn ? styles.powerPillOn : styles.powerPillOff,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.powerPillText,
-                          bulb.isOn ? styles.powerPillTextOn : styles.powerPillTextOff,
-                        ]}
-                      >
-                        {bulb.isOn ? 'On' : 'Off'}
-                      </Text>
-                    </View>
-                  )}
-                  <Switch
-                    value={bulb.isOn}
-                    onValueChange={(value) => toggleBulbPower(bulb, value)}
-                    disabled={bulb.busy}
-                    trackColor={{ false: '#425c66', true: '#d47a2f' }}
-                    thumbColor="#fff7eb"
-                  />
-                </View>
-              </View>
-
-              <Text style={styles.lastAction}>Last action: {bulb.lastAction}</Text>
-
-              <View style={styles.bulbSliderHeader}>
-                <Text style={styles.cardLabel}>Brightness</Text>
-                <Text style={styles.cardValue}>{bulb.brightness}%</Text>
-              </View>
-              <Slider
-                minimumValue={5}
-                maximumValue={100}
-                step={1}
-                value={bulb.brightness}
-                onSlidingComplete={(value) => setBulbBrightness(bulb, value)}
-                minimumTrackTintColor={bulb.accent}
-                maximumTrackTintColor="#2b4048"
-                thumbTintColor="#fff7eb"
-                disabled={bulb.busy}
-              />
-
-              <View style={styles.quickActions}>
-                {BULB_QUICK_ACTIONS.map((scene) => (
-                  <MiniSceneButton
-                    key={`${bulb.id}-${scene.id}`}
-                    label={scene.name}
-                    accent={scene.accent}
-                    onPress={() => applySceneToBulb(bulb, scene)}
-                    disabled={bulb.busy}
-                  />
-                ))}
-              </View>
-            </View>
-          ))
-        ) : (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>No bulbs configured</Text>
-            <Text style={styles.emptyText}>
-              Add one or more entries to app/config.ts and this screen will populate automatically.
-            </Text>
+        <View style={styles.controlCard}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Temperature</Text>
+            <Text style={styles.cardValue}>{draft.temp}°C</Text>
           </View>
-        )}
+          <Slider
+            minimumValue={16}
+            maximumValue={30}
+            step={1}
+            value={draft.temp}
+            minimumTrackTintColor="#ff9b6a"
+            maximumTrackTintColor="#e4d8cb"
+            thumbTintColor="#fff9f0"
+            disabled={controlsDisabled}
+            onValueChange={(value) =>
+              setDraft((current) => ({
+                ...current,
+                temp: Math.round(value),
+              }))
+            }
+            onSlidingComplete={(value) => {
+              const nextScene = {
+                ...draft,
+                power: 1,
+                temp: Math.round(value),
+              };
 
-        <SectionHeading
-          title="IR Bridge"
-          subtitle="The Tuya device config exists; the transport layer is the next build step."
-        />
+              if (sceneEquals(nextScene, applied)) {
+                return;
+              }
 
-        <View style={styles.tuyaCard}>
-          <View style={styles.tuyaHeader}>
-            <View>
-              <Text style={styles.tuyaTitle}>Tuya IR blaster</Text>
-              <Text style={styles.tuyaMeta}>Backend {TUYA_CLOUD.backendBaseUrl}</Text>
-            </View>
-            <View
-              style={[
-                styles.tuyaBadge,
-                tuyaReady ? styles.tuyaBadgeReady : styles.tuyaBadgeWaiting,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.tuyaBadgeText,
-                  tuyaReady ? styles.tuyaBadgeTextReady : styles.tuyaBadgeTextWaiting,
-                ]}
-              >
-                {tuyaReady ? 'Configured' : 'Needs keys'}
-              </Text>
-            </View>
+              submitScene(nextScene, `${nextScene.temp}° sent.`);
+            }}
+          />
+          <View style={styles.sliderLabels}>
+            <Text style={styles.sliderLabel}>16°</Text>
+            <Text style={styles.sliderLabel}>30°</Text>
           </View>
+        </View>
 
-          <Text style={styles.tuyaText}>
-            {tuyaReady
-              ? `The backend will control IR blaster ${TUYA_CLOUD.infraredId} and AC remote ${TUYA_CLOUD.acRemoteId}. Start the local server with npm run backend after creating backend/.env.`
-              : 'Fill in infraredId, acRemoteId, and backendBaseUrl in app/config.ts, then create backend/.env with your Tuya client credentials.'}
-          </Text>
+        <View style={styles.controlCard}>
+          <Text style={styles.cardTitle}>Mode</Text>
+          <View style={styles.chipGrid}>
+            {MODE_OPTIONS.map((option) => {
+              const active = draft.mode === option.value;
+
+              return (
+                <Pressable
+                  key={option.value}
+                  style={({ pressed }) => [
+                    styles.modeChip,
+                    active ? styles.modeChipActive : null,
+                    pressed ? styles.pressed : null,
+                    controlsDisabled ? styles.disabled : null,
+                  ]}
+                  disabled={controlsDisabled}
+                  onPress={() => {
+                    const nextScene = {
+                      ...draft,
+                      power: 1,
+                      mode: option.value,
+                    };
+
+                    if (sceneEquals(nextScene, applied)) {
+                      return;
+                    }
+
+                    submitScene(nextScene, `${option.label} mode.`);
+                  }}
+                >
+                  <Text style={[styles.modeChipLabel, active ? styles.modeChipLabelActive : null]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.controlCard}>
+          <Text style={styles.cardTitle}>Fan speed</Text>
+          <View style={styles.fanRow}>
+            {FAN_OPTIONS.map((option) => {
+              const active = draft.wind === option.value;
+
+              return (
+                <Pressable
+                  key={option.value}
+                  style={({ pressed }) => [
+                    styles.fanChip,
+                    active ? styles.fanChipActive : null,
+                    pressed ? styles.pressed : null,
+                    controlsDisabled ? styles.disabled : null,
+                  ]}
+                  disabled={controlsDisabled}
+                  onPress={() => {
+                    const nextScene = {
+                      ...draft,
+                      power: 1,
+                      wind: option.value,
+                    };
+
+                    if (sceneEquals(nextScene, applied)) {
+                      return;
+                    }
+
+                    submitScene(nextScene, `${option.label} fan.`);
+                  }}
+                >
+                  <Text style={[styles.fanChipLabel, active ? styles.fanChipLabelActive : null]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
       </ScrollView>
+
+      {showSplash ? (
+        <Animated.View
+          style={[
+            styles.splashScreen,
+            {
+              opacity: splashOpacity,
+              transform: [{ translateY: splashTranslate }],
+            },
+          ]}
+        >
+          <View style={styles.splashHalo} />
+          <View style={styles.splashCore}>
+            <Text style={styles.splashEyebrow}>ROOM</Text>
+            <Text style={styles.splashTitle}>Climate Deck</Text>
+            <ActivityIndicator size="small" color="#19334a" />
+          </View>
+        </Animated.View>
+      ) : null}
     </SafeAreaView>
   );
 }
 
-function MetricCard({ label, value }: { label: string; value: string }) {
+function StatPill({ label, value }: { label: string; value: string }) {
   return (
-    <View style={styles.metricCard}>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricValue}>{value}</Text>
+    <View style={styles.statPill}>
+      <Text style={styles.statPillLabel}>{label}</Text>
+      <Text style={styles.statPillValue}>{value}</Text>
     </View>
-  );
-}
-
-function ActionButton({
-  label,
-  accent,
-  disabled,
-  onPress,
-}: {
-  label: string;
-  accent: string;
-  disabled?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => [
-        styles.actionButton,
-        { backgroundColor: accent },
-        pressed && !disabled ? styles.pressed : null,
-        disabled ? styles.disabled : null,
-      ]}
-    >
-      <Text style={styles.actionButtonText}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function SceneCard({
-  scene,
-  disabled,
-  onPress,
-}: {
-  scene: Scene;
-  disabled?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => [
-        styles.sceneCard,
-        { borderColor: scene.accent },
-        pressed && !disabled ? styles.pressed : null,
-        disabled ? styles.disabled : null,
-      ]}
-    >
-      <View style={[styles.sceneSwatch, { backgroundColor: scene.accent }]} />
-      <Text style={styles.sceneTitle}>{scene.name}</Text>
-      <Text style={styles.sceneCaption}>{scene.caption}</Text>
-    </Pressable>
-  );
-}
-
-function MiniSceneButton({
-  label,
-  accent,
-  disabled,
-  onPress,
-}: {
-  label: string;
-  accent: string;
-  disabled?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => [
-        styles.miniButton,
-        { borderColor: accent },
-        pressed && !disabled ? styles.pressed : null,
-        disabled ? styles.disabled : null,
-      ]}
-    >
-      <Text style={[styles.miniButtonText, { color: accent }]}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -605,164 +559,160 @@ function NoticeBanner({ tone, text }: Notice) {
   );
 }
 
-function SectionHeading({ title, subtitle }: { title: string; subtitle: string }) {
-  return (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <Text style={styles.sectionSubtitle}>{subtitle}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#efe8dc',
+    backgroundColor: '#f6eee2',
   },
   backgroundArt: {
     ...StyleSheet.absoluteFillObject,
   },
-  glow: {
+  aurora: {
     position: 'absolute',
     borderRadius: 999,
-    opacity: 0.7,
+    opacity: 0.72,
   },
-  glowAmber: {
+  auroraBlue: {
+    width: 280,
+    height: 280,
+    top: -60,
+    right: -80,
+    backgroundColor: '#b9ddf4',
+  },
+  auroraPeach: {
+    width: 250,
+    height: 250,
+    left: -90,
+    top: 180,
+    backgroundColor: '#ffd2af',
+  },
+  auroraMint: {
     width: 240,
     height: 240,
-    top: -40,
-    right: -50,
-    backgroundColor: '#f6b65c',
-  },
-  glowTeal: {
-    width: 220,
-    height: 220,
-    bottom: 160,
-    left: -90,
-    backgroundColor: '#79c8c5',
+    right: -100,
+    bottom: 110,
+    backgroundColor: '#cfe8d8',
   },
   content: {
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 40,
+    paddingBottom: 36,
   },
   header: {
     marginBottom: 18,
   },
   eyebrow: {
-    color: '#4f635f',
+    color: '#607271',
     fontSize: 12,
     fontWeight: '800',
-    letterSpacing: 2.2,
-    marginBottom: 8,
+    letterSpacing: 2.1,
+    marginBottom: 10,
   },
   title: {
-    color: '#12232b',
-    fontSize: 38,
-    fontWeight: '800',
-    letterSpacing: -1.2,
+    color: '#172935',
+    fontSize: 40,
+    fontWeight: '900',
+    letterSpacing: -1.4,
   },
   subtitle: {
-    color: '#425864',
-    fontSize: 16,
-    lineHeight: 23,
+    color: '#506163',
+    fontSize: 15,
+    lineHeight: 22,
     marginTop: 8,
-    maxWidth: 320,
+    maxWidth: 340,
   },
   heroCard: {
-    backgroundColor: '#152730',
-    borderRadius: 28,
+    backgroundColor: '#fff8ef',
+    borderRadius: 30,
     padding: 20,
-    shadowColor: '#0e1a20',
-    shadowOpacity: 0.2,
-    shadowRadius: 18,
+    borderWidth: 1,
+    borderColor: '#f0dfcd',
+    shadowColor: '#c99c73',
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
     shadowOffset: { width: 0, height: 12 },
-    elevation: 6,
+    elevation: 5,
   },
-  heroTopRow: {
+  heroTop: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 16,
+  },
+  heroTextWrap: {
+    flex: 1,
   },
   heroLabel: {
-    color: '#83a1aa',
+    color: '#7c8475',
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    letterSpacing: 1.3,
   },
   heroValue: {
-    color: '#f8f2e8',
-    fontSize: 26,
-    fontWeight: '800',
+    color: '#162834',
+    fontSize: 46,
+    fontWeight: '900',
+    letterSpacing: -1.6,
     marginTop: 4,
   },
-  heroBadge: {
-    backgroundColor: '#233944',
+  heroSubValue: {
+    color: '#536265',
+    fontSize: 15,
+    lineHeight: 21,
+    marginTop: 6,
+    maxWidth: 190,
+  },
+  powerOrb: {
+    width: 126,
+    height: 126,
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  heroBadgeText: {
-    color: '#cfe0df',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  metricRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 18,
-  },
-  metricCard: {
-    flex: 1,
-    backgroundColor: '#20343e',
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-  },
-  metricLabel: {
-    color: '#8daab0',
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  metricValue: {
-    color: '#fff5e5',
-    fontSize: 20,
-    fontWeight: '800',
-    marginTop: 5,
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 18,
-  },
-  actionButton: {
-    flex: 1,
-    borderRadius: 18,
-    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 14,
   },
-  actionButtonText: {
-    color: '#fff8ec',
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0.2,
+  powerOrbOn: {
+    backgroundColor: '#152f3d',
   },
-  sliderTitle: {
-    color: '#f8f2e8',
-    fontSize: 15,
-    fontWeight: '700',
-    marginTop: 18,
+  powerOrbOff: {
+    backgroundColor: '#e6dbcf',
+  },
+  powerOrbIcon: {
+    color: '#fff7ee',
+    fontSize: 34,
+    fontWeight: '300',
     marginBottom: 4,
   },
-  helperText: {
-    color: '#87a0a7',
+  powerOrbLabel: {
+    color: '#fff7ee',
     fontSize: 13,
-    lineHeight: 18,
-    marginTop: 8,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 18,
+  },
+  statPill: {
+    flex: 1,
+    backgroundColor: '#f3eadf',
+    borderRadius: 18,
+    paddingVertical: 13,
+    paddingHorizontal: 12,
+  },
+  statPillLabel: {
+    color: '#7a8479',
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  statPillValue: {
+    color: '#1a2f39',
+    fontSize: 18,
+    fontWeight: '800',
+    marginTop: 5,
   },
   noticeBanner: {
     borderRadius: 18,
@@ -771,16 +721,16 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   noticeInfo: {
-    backgroundColor: '#d8e2df',
+    backgroundColor: '#e2e8e4',
   },
   noticeSuccess: {
-    backgroundColor: '#d7e8cf',
+    backgroundColor: '#ddebd6',
   },
   noticeError: {
-    backgroundColor: '#f1d4c7',
+    backgroundColor: '#f3d4c6',
   },
   noticeText: {
-    color: '#22353d',
+    color: '#20363f',
     fontSize: 14,
     fontWeight: '700',
     lineHeight: 20,
@@ -790,201 +740,260 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    color: '#152730',
-    fontSize: 24,
-    fontWeight: '800',
-    letterSpacing: -0.5,
+    color: '#162834',
+    fontSize: 26,
+    fontWeight: '900',
+    letterSpacing: -0.7,
   },
   sectionSubtitle: {
-    color: '#4e615f',
+    color: '#5a6a6d',
     fontSize: 14,
     lineHeight: 20,
-    marginTop: 4,
+    marginTop: 5,
   },
-  sceneRail: {
+  presetRail: {
     gap: 12,
     paddingRight: 4,
   },
-  sceneCard: {
-    width: 172,
-    backgroundColor: '#fff7ed',
-    borderRadius: 22,
-    padding: 16,
+  presetCard: {
+    width: 188,
+    backgroundColor: '#fff8ef',
+    borderRadius: 24,
     borderWidth: 1,
+    padding: 16,
   },
-  sceneSwatch: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
+  presetAccent: {
+    width: 54,
+    height: 10,
+    borderRadius: 999,
     marginBottom: 14,
   },
-  sceneTitle: {
-    color: '#152730',
-    fontSize: 18,
-    fontWeight: '800',
+  presetTitle: {
+    color: '#172935',
+    fontSize: 19,
+    fontWeight: '900',
   },
-  sceneCaption: {
-    color: '#506461',
+  presetCaption: {
+    color: '#59696b',
     fontSize: 13,
     lineHeight: 18,
-    marginTop: 8,
+    marginTop: 7,
   },
-  bulbCard: {
-    backgroundColor: '#152730',
+  presetMeta: {
+    color: '#233946',
+    fontSize: 12,
+    fontWeight: '800',
+    marginTop: 12,
+  },
+  controlCard: {
+    backgroundColor: '#fff8ef',
     borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#f0dfcd',
     padding: 18,
     marginBottom: 14,
   },
-  bulbHeader: {
+  cardHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    marginBottom: 8,
   },
-  bulbTitleWrap: {
-    flex: 1,
-  },
-  bulbName: {
-    color: '#fff5e8',
-    fontSize: 21,
-    fontWeight: '800',
-  },
-  bulbIp: {
-    color: '#8da4ac',
-    fontSize: 13,
-    marginTop: 4,
-  },
-  bulbControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  powerPill: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  powerPillOn: {
-    backgroundColor: '#2f4a39',
-  },
-  powerPillOff: {
-    backgroundColor: '#2c3c45',
-  },
-  powerPillText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  powerPillTextOn: {
-    color: '#cbf2cb',
-  },
-  powerPillTextOff: {
-    color: '#c7d3d8',
-  },
-  lastAction: {
-    color: '#8ca3ab',
-    fontSize: 13,
-    marginTop: 12,
-  },
-  bulbSliderHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 14,
-  },
-  cardLabel: {
-    color: '#d0e1e1',
-    fontSize: 14,
-    fontWeight: '700',
+  cardTitle: {
+    color: '#172935',
+    fontSize: 20,
+    fontWeight: '900',
   },
   cardValue: {
-    color: '#fff3e0',
+    color: '#ff8650',
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  sliderLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  sliderLabel: {
+    color: '#74827c',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  chipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 12,
+  },
+  modeChip: {
+    width: '48%',
+    backgroundColor: '#f5ecdf',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  modeChipActive: {
+    backgroundColor: '#19334a',
+  },
+  modeChipLabel: {
+    color: '#193242',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  modeChipLabelActive: {
+    color: '#fff7ef',
+  },
+  modeChipHint: {
+    color: '#66767b',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  modeChipHintActive: {
+    color: '#bfd2de',
+  },
+  fanRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  fanChip: {
+    flex: 1,
+    backgroundColor: '#f5ecdf',
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fanChipActive: {
+    backgroundColor: '#ffb17b',
+  },
+  fanChipLabel: {
+    color: '#1e3540',
     fontSize: 14,
     fontWeight: '800',
   },
-  quickActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
+  fanChipLabelActive: {
+    color: '#532c14',
   },
-  miniButton: {
-    flex: 1,
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingVertical: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#102029',
-  },
-  miniButtonText: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  emptyCard: {
-    backgroundColor: '#fff7ed',
-    borderRadius: 22,
+  actionPanel: {
+    backgroundColor: '#152f3d',
+    borderRadius: 26,
     padding: 18,
+    marginTop: 4,
   },
-  emptyTitle: {
-    color: '#152730',
-    fontSize: 20,
-    fontWeight: '800',
+  actionCopy: {
+    marginBottom: 16,
   },
-  emptyText: {
-    color: '#4f6464',
+  actionTitle: {
+    color: '#fff8ef',
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  actionSubtitle: {
+    color: '#c6d7da',
     fontSize: 14,
     lineHeight: 20,
     marginTop: 6,
   },
-  tuyaCard: {
-    backgroundColor: '#fff7ed',
-    borderRadius: 24,
-    padding: 18,
-  },
-  tuyaHeader: {
+  actionButtons: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     gap: 12,
   },
-  tuyaTitle: {
-    color: '#152730',
-    fontSize: 21,
+  secondaryButton: {
+    flex: 1,
+    backgroundColor: '#274657',
+    borderRadius: 18,
+    paddingVertical: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryButtonText: {
+    color: '#d7ebeb',
+    fontSize: 15,
     fontWeight: '800',
   },
-  tuyaMeta: {
-    color: '#556969',
+  primaryButton: {
+    flex: 1.4,
+    backgroundColor: '#ff9b6a',
+    borderRadius: 18,
+    paddingVertical: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: {
+    color: '#fff8ef',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  linkedCard: {
+    backgroundColor: '#fff8ef',
+    borderRadius: 24,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#f0dfcd',
+    marginTop: 16,
+  },
+  linkedTitle: {
+    color: '#182b34',
+    fontSize: 20,
+    fontWeight: '900',
+    marginBottom: 8,
+  },
+  linkedMeta: {
+    color: '#607072',
     fontSize: 13,
-    marginTop: 4,
+    lineHeight: 20,
   },
-  tuyaBadge: {
+  splashScreen: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#f6eee2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  splashHalo: {
+    position: 'absolute',
+    width: 280,
+    height: 280,
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    backgroundColor: '#ffd2af',
+    opacity: 0.9,
   },
-  tuyaBadgeReady: {
-    backgroundColor: '#d4e8d2',
+  splashCore: {
+    width: 280,
+    paddingVertical: 30,
+    paddingHorizontal: 24,
+    borderRadius: 32,
+    backgroundColor: '#fff7ed',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#edd7c0',
+    shadowColor: '#d0a178',
+    shadowOpacity: 0.16,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 6,
   },
-  tuyaBadgeWaiting: {
-    backgroundColor: '#ead7c5',
-  },
-  tuyaBadgeText: {
+  splashEyebrow: {
+    color: '#6d7d78',
     fontSize: 12,
     fontWeight: '800',
+    letterSpacing: 2.3,
+    marginBottom: 10,
   },
-  tuyaBadgeTextReady: {
-    color: '#275137',
+  splashTitle: {
+    color: '#152f3d',
+    fontSize: 34,
+    fontWeight: '900',
+    letterSpacing: -1,
   },
-  tuyaBadgeTextWaiting: {
-    color: '#7b4e23',
-  },
-  tuyaText: {
-    color: '#4f6365',
+  splashSubtitle: {
+    color: '#617173',
     fontSize: 14,
-    lineHeight: 21,
-    marginTop: 14,
+    marginTop: 8,
+    marginBottom: 18,
   },
   pressed: {
-    opacity: 0.8,
+    opacity: 0.82,
   },
   disabled: {
     opacity: 0.45,

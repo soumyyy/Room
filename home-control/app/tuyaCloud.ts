@@ -8,11 +8,14 @@ export type AcScenePayload = {
 export type AcStatus = {
   power_open?: boolean;
   power_name?: string;
+  power?: string | number;
   mode?: number;
+  temp?: string | number;
   mode_name?: string;
   temperature?: string | number;
   temperature_name?: string;
   fan?: number;
+  wind?: string | number;
   fan_name?: string;
 };
 
