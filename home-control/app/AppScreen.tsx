@@ -4,8 +4,8 @@ import {
   ActivityIndicator,
   Animated,
   Modal,
+  Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -66,7 +66,7 @@ const DEFAULT_BULB_BRIGHTNESS = 68;
 
 const MODE_OPTIONS: Array<{ value: ModeValue; label: string }> = [
   { value: 0, label: 'Cool' },
-  { value: 1, label: 'Heat' },
+  // { value: 1, label: 'Heat' },
   { value: 2, label: 'Auto' },
   { value: 3, label: 'Fan' },
   { value: 4, label: 'Dry' },
@@ -376,6 +376,9 @@ export default function AppScreen() {
   const [selectedGroupColor, setSelectedGroupColor] = useState<Record<string, string>>(() =>
     Object.fromEntries(BULB_GROUPS.map((group) => [group.id, 'warm-white'])),
   );
+  const [inRoom, setInRoom] = useState(true);
+  const [roomBusy, setRoomBusy] = useState(false);
+  const savedRoomState = useRef<{ ac: AcScene; activeGroupIds: string[] } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [showSplash, setShowSplash] = useState(true);
   const [colorSheetGroupId, setColorSheetGroupId] = useState<string | null>(null);
@@ -560,6 +563,39 @@ export default function AppScreen() {
     setColorSheetGroupId(groupId);
   }
 
+  async function leaveRoom() {
+    setRoomBusy(true);
+    savedRoomState.current = {
+      ac,
+      activeGroupIds: BULB_GROUPS
+        .filter((g) => bulbsForGroup(g, bulbs).some((b) => b.isOn))
+        .map((g) => g.id),
+    };
+    await Promise.all([
+      ac.power ? submitAcScene({ ...ac, power: 0 }) : Promise.resolve(),
+      ...BULB_GROUPS.map((g) =>
+        runGroupCommand(g, (b) => ({ ...b, isOn: false }), { state: false }),
+      ),
+    ]);
+    setInRoom(false);
+    setRoomBusy(false);
+  }
+
+  async function enterRoom() {
+    setRoomBusy(true);
+    setInRoom(true);
+    const saved = savedRoomState.current;
+    if (saved) {
+      await Promise.all([
+        saved.ac.power ? submitAcScene(saved.ac) : Promise.resolve(),
+        ...BULB_GROUPS
+          .filter((g) => saved.activeGroupIds.includes(g.id))
+          .map((g) => runGroupCommand(g, (b) => ({ ...b, isOn: true }), { state: true })),
+      ]);
+    }
+    setRoomBusy(false);
+  }
+
   useEffect(() => {
     Animated.timing(acTempAnim, {
       toValue: ac.power ? 1 : 0,
@@ -613,7 +649,7 @@ export default function AppScreen() {
 
 
   return (
-    <SafeAreaView style={styles.root}>
+    <View style={styles.root}>
       <StatusBar style="light" />
 
       {toast ? (
@@ -625,6 +661,26 @@ export default function AppScreen() {
       ) : null}
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+
+        {/* ── Room toggle ───────────────────────────────────────────────── */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.roomBtn,
+            inRoom ? styles.roomBtnIn : styles.roomBtnOut,
+            pressed ? styles.pressed : null,
+            roomBusy ? styles.disabled : null,
+          ]}
+          disabled={roomBusy}
+          onPress={() => (inRoom ? leaveRoom() : enterRoom())}
+        >
+          {roomBusy ? (
+            <ActivityIndicator size="small" color={inRoom ? '#636366' : '#000000'} />
+          ) : (
+            <Text style={[styles.roomBtnText, inRoom ? styles.roomBtnTextIn : styles.roomBtnTextOut]}>
+              {inRoom ? 'Leave Room' : 'Enter Room'}
+            </Text>
+          )}
+        </Pressable>
 
         {/* ── AC Hero ─────────────────────────────────────────────────── */}
         <View style={styles.acHero}>
@@ -695,12 +751,15 @@ export default function AppScreen() {
           </Animated.View>
         </View>
 
-        {/* ── Presets ──────────────────────────────────────────────────── */}
+        {/* ── Presets / Mode / Fan — dimmed when AC is off ─────────────── */}
+        <View style={[styles.acControls, !ac.power ? styles.acControlsOff : null]}>
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.presetRail}
           style={styles.presetScroll}
+          pointerEvents={!ac.power ? 'none' : 'auto'}
         >
           {PRESETS.map((preset) => (
             <Pressable
@@ -725,7 +784,7 @@ export default function AppScreen() {
         </ScrollView>
 
         {/* ── Mode ──────────────────────────────────────────────────────── */}
-        <View style={styles.pillCard}>
+        <View style={styles.pillCard} pointerEvents={!ac.power ? 'none' : 'auto'}>
           <View style={styles.pillCardHeader}>
             <Text style={styles.pillSectionLabel}>Mode</Text>
             <Text style={styles.pillCardValue}>{modeLabel(ac.mode)}</Text>
@@ -759,7 +818,7 @@ export default function AppScreen() {
         </View>
 
         {/* ── Fan speed ─────────────────────────────────────────────────── */}
-        <View style={styles.pillCard}>
+        <View style={styles.pillCard} pointerEvents={!ac.power ? 'none' : 'auto'}>
           <View style={styles.pillCardHeader}>
             <Text style={styles.pillSectionLabel}>Fan</Text>
             <Text style={styles.pillCardValue}>{windLabel(ac.wind)}</Text>
@@ -791,6 +850,8 @@ export default function AppScreen() {
             })}
           </ScrollView>
         </View>
+
+        </View>{/* end acControls */}
 
         {/* ── Lights ────────────────────────────────────────────────────── */}
         <View style={styles.lightsSection}>
@@ -1055,7 +1116,7 @@ export default function AppScreen() {
           <ActivityIndicator size="small" color="#3a3a3c" style={styles.splashSpinner} />
         </Animated.View>
       ) : null}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -1063,9 +1124,35 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#000000',
-    paddingLeft: 0,
-    paddingRight: 0,
-    paddingBottom: 0,
+    paddingTop: Platform.OS === 'ios' ? 54 : 0,
+  },
+
+  // ── Room button ───────────────────────────────────────────────────────────
+  roomBtn: {
+    borderRadius: 16,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 28,
+  },
+  roomBtnIn: {
+    backgroundColor: '#1c1c1e',
+    borderWidth: 1,
+    borderColor: '#ffffff0a',
+  },
+  roomBtnOut: {
+    backgroundColor: '#ffffff',
+  },
+  roomBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: -0.1,
+  },
+  roomBtnTextIn: {
+    color: '#636366',
+  },
+  roomBtnTextOut: {
+    color: '#000000',
   },
 
   // ── Toast ──────────────────────────────────────────────────────────────────
@@ -1195,6 +1282,14 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     marginTop: 6,
     letterSpacing: 0.1,
+  },
+
+  // ── AC controls wrapper ───────────────────────────────────────────────────
+  acControls: {
+    opacity: 1,
+  },
+  acControlsOff: {
+    opacity: 0.3,
   },
 
   // ── Presets ───────────────────────────────────────────────────────────────
