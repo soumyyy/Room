@@ -17,10 +17,7 @@ actor WiZClient {
   }
 
   private func sendPilot(_ pilot: WizPilot, to host: String) async throws {
-    let payload = try JSONEncoder().encode([
-      "method": "setPilot",
-      "params": pilot,
-    ] as [String: AnyEncodable])
+    let payload = try JSONEncoder().encode(WizEnvelope(method: "setPilot", params: pilot))
 
     try await send(payload, to: host)
     try await Task.sleep(nanoseconds: RoomConfig.wizRetryDelayNanoseconds)
@@ -34,26 +31,21 @@ actor WiZClient {
       using: .udp
     )
 
-    try await withCheckedThrowingContinuation { continuation in
-      var hasResumed = false
-
-      func resume(_ result: Result<Void, Error>) {
-        guard !hasResumed else { return }
-        hasResumed = true
-        connection.cancel()
-        continuation.resume(with: result)
-      }
-
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       connection.stateUpdateHandler = { state in
         switch state {
         case .failed(let error):
-          resume(.failure(RoomNetworkError.wiz(message: error.localizedDescription)))
+          connection.stateUpdateHandler = nil
+          connection.cancel()
+          continuation.resume(throwing: RoomNetworkError.wiz(message: error.localizedDescription))
         case .ready:
+          connection.stateUpdateHandler = nil
           connection.send(content: payload, completion: .contentProcessed { error in
+            connection.cancel()
             if let error {
-              resume(.failure(RoomNetworkError.wiz(message: error.localizedDescription)))
+              continuation.resume(throwing: RoomNetworkError.wiz(message: error.localizedDescription))
             } else {
-              resume(.success(()))
+              continuation.resume()
             }
           })
         default:
@@ -66,14 +58,7 @@ actor WiZClient {
   }
 }
 
-private struct AnyEncodable: Encodable {
-  private let encodeImpl: (Encoder) throws -> Void
-
-  init<T: Encodable>(_ value: T) {
-    encodeImpl = value.encode
-  }
-
-  func encode(to encoder: Encoder) throws {
-    try encodeImpl(encoder)
-  }
+private struct WizEnvelope: Encodable {
+  let method: String
+  let params: WizPilot
 }

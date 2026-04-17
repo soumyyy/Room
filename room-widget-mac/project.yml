@@ -10,6 +10,11 @@ targets:
     type: application
     platform: macOS
     deploymentTarget: "14.0"
+    entitlements:
+      path: Config/App.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
     sources:
       - path: Sources/App
       - path: Sources/Shared
@@ -31,11 +36,19 @@ targets:
     type: app-extension
     platform: macOS
     deploymentTarget: "14.0"
+    entitlements:
+      path: Config/Widget.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
     sources:
       - path: Sources/Widget
       - path: Sources/Shared
     info:
       path: Config/WidgetInfo.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.soumya.roomwidgetmac.widgets
@@ -51,3 +64,9 @@ schemes:
       targets:
         RoomWidgetMac: all
         RoomWidgetMacWidgets: all
+  RoomWidgetMacWidgets:
+    build:
+      targets:
+        RoomWidgetMacWidgets: all
+    run:
+      config: Debug
