@@ -1,0 +1,53 @@
+name: RoomWidgetMac
+options:
+  minimumXcodeGenVersion: 2.45.0
+settings:
+  base:
+    SWIFT_VERSION: 6.0
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+targets:
+  RoomWidgetMac:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources/App
+      - path: Sources/Shared
+      - path: Assets
+        buildPhase: resources
+    info:
+      path: Config/AppInfo.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.soumya.roomwidgetmac
+        PRODUCT_NAME: Room
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: NO
+    dependencies:
+      - target: RoomWidgetMacWidgets
+        embed: true
+
+  RoomWidgetMacWidgets:
+    type: app-extension
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources/Widget
+      - path: Sources/Shared
+    info:
+      path: Config/WidgetInfo.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.soumya.roomwidgetmac.widgets
+        PRODUCT_NAME: RoomWidgets
+        GENERATE_INFOPLIST_FILE: NO
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks @executable_path/../../Frameworks"
+
+schemes:
+  RoomWidgetMac:
+    build:
+      targets:
+        RoomWidgetMac: all
+        RoomWidgetMacWidgets: all

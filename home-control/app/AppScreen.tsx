@@ -7,6 +7,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StatusBar as RNStatusBar,
   StyleSheet,
   Text,
   View,
@@ -20,8 +21,13 @@ import {
   type BulbConfig,
   type BulbGroupConfig,
 } from './config';
-import { getAcStatus, sendAcScene, type AcScenePayload, type AcStatus } from './tuyaCloud';
-import { getWizStatuses, sendWizCommand, type WizPilotStatus } from './wizCloud';
+import { getAcStatus, sendAcScene, type AcScenePayload, type AcStatus } from './tuya';
+import {
+  getWizStatuses,
+  isUsingDirectWiz,
+  sendWizCommand,
+  type WizPilotStatus,
+} from './wizClient';
 
 type ModeValue = 0 | 1 | 2 | 3 | 4;
 type WindValue = 0 | 1 | 2 | 3;
@@ -255,9 +261,10 @@ const GROUP_COLOR_PRESETS: GroupColorPreset[] = [
 
 function isTuyaConfigured() {
   return (
+    !TUYA_CLOUD.clientId.startsWith('YOUR_') &&
+    !TUYA_CLOUD.clientSecret.startsWith('YOUR_') &&
     !TUYA_CLOUD.infraredId.startsWith('YOUR_') &&
-    !TUYA_CLOUD.acRemoteId.startsWith('YOUR_') &&
-    TUYA_CLOUD.backendBaseUrl.startsWith('http')
+    !TUYA_CLOUD.acRemoteId.startsWith('YOUR_')
   );
 }
 
@@ -388,8 +395,9 @@ export default function AppScreen() {
   const acTempAnim = useRef(new Animated.Value(INITIAL_SCENE.power ? 1 : 0)).current;
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const backendReady = TUYA_CLOUD.backendBaseUrl.startsWith('http');
   const tuyaReady = isTuyaConfigured();
+  const wizDirectAvailable = isUsingDirectWiz();
+  const wizReady = wizDirectAvailable || TUYA_CLOUD.backendBaseUrl.startsWith('http');
   const acDisabled = !tuyaReady || acBusy || loadingStatus;
 
   function showErrorToast(message: string) {
@@ -416,7 +424,7 @@ export default function AppScreen() {
     }
 
     try {
-      const status = await getAcStatus(TUYA_CLOUD.backendBaseUrl);
+      const status = await getAcStatus();
       setAc(normalizeStatus(status));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to reach the backend';
@@ -429,34 +437,32 @@ export default function AppScreen() {
   }
 
   async function loadBulbStatus() {
-    if (!backendReady) {
-      return;
-    }
-
     try {
-      const statuses = await getWizStatuses(TUYA_CLOUD.backendBaseUrl, BULBS);
+      const statuses = await getWizStatuses(BULBS);
       setBulbs((current) => mergeBulbStatuses(current, statuses));
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to reach the lights';
+      const message =
+        error instanceof Error
+          ? error.message
+          : wizDirectAvailable
+            ? 'Unable to reach the lights'
+            : 'Unable to reach the WiZ backend';
       showErrorToast(message);
     }
   }
 
   async function syncGroupStatus(group: BulbGroupConfig) {
-    if (!backendReady) {
-      showErrorToast('Set the backend URL first.');
-      return null;
-    }
-
     try {
-      const statuses = await getWizStatuses(
-        TUYA_CLOUD.backendBaseUrl,
-        bulbsForGroup(group, BULBS),
-      );
+      const statuses = await getWizStatuses(bulbsForGroup(group, BULBS));
       setBulbs((current) => mergeBulbStatuses(current, statuses));
       return statuses;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to verify light status';
+      const message =
+        error instanceof Error
+          ? error.message
+          : wizDirectAvailable
+            ? 'Unable to verify light status'
+            : 'Unable to reach the WiZ backend';
       showErrorToast(message);
       return null;
     }
@@ -473,14 +479,14 @@ export default function AppScreen() {
     setAcBusy(true);
 
     try {
-      const accepted = await sendAcScene(TUYA_CLOUD.backendBaseUrl, sceneToPayload(nextScene));
+      const accepted = await sendAcScene(sceneToPayload(nextScene));
 
       if (!accepted) {
         throw new Error('AC command not confirmed.');
       }
 
       try {
-        const status = await getAcStatus(TUYA_CLOUD.backendBaseUrl);
+        const status = await getAcStatus();
         setAc(normalizeStatus(status));
       } catch {
         setAc(nextScene);
@@ -499,11 +505,6 @@ export default function AppScreen() {
     optimisticUpdate: (bulb: BulbState) => BulbState,
     params: Record<string, unknown>,
   ) {
-    if (!backendReady) {
-      showErrorToast('Set the backend URL first.');
-      return false;
-    }
-
     const snapshot = bulbs.filter((bulb) => group.bulbIds.includes(bulb.id));
 
     if (!snapshot.length) {
@@ -517,10 +518,10 @@ export default function AppScreen() {
     );
 
     try {
-      const statuses = await sendWizCommand(TUYA_CLOUD.backendBaseUrl, {
-        bulbs: snapshot.map(({ id, name, ip }) => ({ id, name, ip })),
+      const statuses = await sendWizCommand(
+        snapshot.map(({ id, name, ip }) => ({ id, name, ip })),
         params,
-      });
+      );
       setBulbs((current) => mergeBulbStatuses(current, statuses));
       return true;
     } catch (error) {
@@ -530,7 +531,12 @@ export default function AppScreen() {
           return original ? { ...original, busy: false } : bulb;
         }),
       );
-      const message = error instanceof Error ? error.message : 'WiZ group command failed';
+      const message =
+        error instanceof Error
+          ? error.message
+          : wizDirectAvailable
+            ? 'WiZ group command failed'
+            : 'WiZ backend command failed';
       showErrorToast(message);
       return false;
     }
@@ -697,7 +703,16 @@ export default function AppScreen() {
             {acBusy ? (
               <ActivityIndicator size="small" color="#ffffff" />
             ) : (
-              <Text style={styles.powerBtnIcon}>⏻</Text>
+              <View style={styles.powerGlyph}>
+                <View style={styles.powerGlyphRing} />
+                <View
+                  style={[
+                    styles.powerGlyphCutout,
+                    ac.power ? styles.powerGlyphCutoutOn : styles.powerGlyphCutoutOff,
+                  ]}
+                />
+                <View style={styles.powerGlyphStem} />
+              </View>
             )}
           </Pressable>
 
@@ -861,9 +876,9 @@ export default function AppScreen() {
               style={({ pressed }) => [
                 styles.allLightsBtn,
                 pressed ? styles.pressed : null,
-                !backendReady || bulbs.some((b) => b.busy) ? styles.disabled : null,
+                !wizReady || bulbs.some((b) => b.busy) ? styles.disabled : null,
               ]}
-              disabled={!backendReady || bulbs.some((b) => b.busy)}
+              disabled={!wizReady || bulbs.some((b) => b.busy)}
               onPress={() => void Promise.all(BULB_GROUPS.map((g) => toggleGroupPower(g)))}
             >
               <Text
@@ -895,12 +910,12 @@ export default function AppScreen() {
                     styles.lightTile,
                     anyOn ? styles.lightTileOn : styles.lightTileOff,
                     pressed ? styles.lightTilePressed : null,
-                    groupBusy || !backendReady ? styles.disabled : null,
+                    groupBusy || !wizReady ? styles.disabled : null,
                   ]}
                   onPress={() => void toggleGroupPower(group)}
                   onLongPress={() => openColorSheet(group.id)}
                   delayLongPress={380}
-                  disabled={groupBusy || !backendReady}
+                  disabled={groupBusy || !wizReady}
                 >
                   {groupBusy ? (
                     <ActivityIndicator
@@ -1124,7 +1139,7 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#000000',
-    paddingTop: Platform.OS === 'ios' ? 54 : 0,
+    paddingTop: Platform.OS === 'ios' ? 54 : (RNStatusBar.currentHeight ?? 0),
   },
 
   // ── Room button ───────────────────────────────────────────────────────────
@@ -1239,10 +1254,41 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 0 },
   },
-  powerBtnIcon: {
-    color: '#ffffff',
-    fontSize: 22,
-    lineHeight: 26,
+  powerGlyph: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  powerGlyphRing: {
+    position: 'absolute',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2.4,
+    borderColor: '#ffffff',
+  },
+  powerGlyphCutout: {
+    position: 'absolute',
+    top: -1,
+    width: 12,
+    height: 9,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+  },
+  powerGlyphCutoutOn: {
+    backgroundColor: '#0a84ff',
+  },
+  powerGlyphCutoutOff: {
+    backgroundColor: '#ff3b30',
+  },
+  powerGlyphStem: {
+    position: 'absolute',
+    top: -1,
+    width: 3.2,
+    height: 12,
+    borderRadius: 999,
+    backgroundColor: '#ffffff',
   },
   acTempRow: {
     flexDirection: 'row',
@@ -1272,8 +1318,8 @@ const styles = StyleSheet.create({
   acTempValue: {
     color: '#ffffff',
     fontSize: 72,
-    fontWeight: '700',
-    letterSpacing: -3,
+    fontWeight: Platform.OS === 'ios' ? '700' : '700',
+    letterSpacing: Platform.OS === 'ios' ? -3 : -1,
     lineHeight: 76,
   },
   acTempSub: {
@@ -1613,8 +1659,8 @@ const styles = StyleSheet.create({
   splashTitle: {
     color: '#ffffff',
     fontSize: 52,
-    fontWeight: '200',
-    letterSpacing: -2.5,
+    fontWeight: Platform.OS === 'ios' ? '200' : '300',
+    letterSpacing: Platform.OS === 'ios' ? -2.5 : -1,
   },
   splashSpinner: {
     marginTop: 28,

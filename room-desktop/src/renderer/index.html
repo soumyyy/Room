@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Room</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="root">
+      <div id="toastWrap" class="toast-wrap" hidden>
+        <div id="toast" class="toast"></div>
+      </div>
+
+      <main class="shell">
+        <button id="roomToggleButton" class="room-btn room-btn-in">Leave Room</button>
+
+        <section class="ac-hero">
+          <button id="acPowerButton" class="power-btn power-btn-off" aria-label="Toggle AC power">
+            <span class="power-glyph">
+              <span class="power-glyph-ring"></span>
+              <span class="power-glyph-cutout"></span>
+              <span class="power-glyph-stem"></span>
+            </span>
+          </button>
+
+          <div id="acTempRow" class="ac-temp-row">
+            <button id="tempDownButton" class="step-btn" aria-label="Decrease temperature">−</button>
+            <div class="ac-temp-center">
+              <div id="tempValue" class="ac-temp-value">--°</div>
+              <div id="tempMeta" class="ac-temp-sub">Cool · Auto</div>
+            </div>
+            <button id="tempUpButton" class="step-btn" aria-label="Increase temperature">+</button>
+          </div>
+        </section>
+
+        <section id="acControls" class="ac-controls">
+          <div id="acPresetRail" class="preset-rail"></div>
+
+          <section class="pill-card">
+            <div class="pill-card-header">
+              <div class="pill-section-label">Mode</div>
+              <div id="modeValue" class="pill-card-value">Cool</div>
+            </div>
+            <div id="modeRail" class="pill-rail"></div>
+          </section>
+
+          <section class="pill-card">
+            <div class="pill-card-header">
+              <div class="pill-section-label">Fan</div>
+              <div id="fanValue" class="pill-card-value">Auto</div>
+            </div>
+            <div id="fanRail" class="pill-rail"></div>
+          </section>
+        </section>
+
+        <section class="lights-section">
+          <div class="lights-section-header">
+            <div class="pill-section-label">Lights</div>
+            <button id="allLightsButton" class="all-lights-btn">All On</button>
+          </div>
+          <div id="lightsGrid" class="light-grid"></div>
+        </section>
+      </main>
+
+      <div id="sheetRoot" class="sheet-root" hidden>
+        <button id="sheetOverlay" class="sheet-overlay" aria-label="Close colour sheet"></button>
+        <section class="sheet" aria-modal="true" role="dialog">
+          <div class="sheet-handle"></div>
+
+          <div class="sheet-header">
+            <div id="sheetTitle" class="sheet-title">Lights</div>
+            <button id="sheetCloseButton" class="sheet-close">Done</button>
+          </div>
+
+          <div class="sheet-section">
+            <div class="sheet-section-header">
+              <div class="sheet-section-label">Brightness</div>
+              <div id="sheetBrightnessValue" class="sheet-brightness-value">68%</div>
+            </div>
+            <input
+              id="sheetBrightnessRange"
+              class="sheet-slider"
+              type="range"
+              min="10"
+              max="100"
+              step="1"
+              value="68"
+            />
+          </div>
+
+          <div class="sheet-section">
+            <div class="sheet-section-label">Colour</div>
+            <div id="sheetVividGrid" class="color-swatch-grid"></div>
+          </div>
+
+          <div class="sheet-section">
+            <div class="sheet-section-label">White</div>
+            <div id="sheetWhiteRow" class="color-chip-row"></div>
+          </div>
+
+          <div class="sheet-section sheet-section-last">
+            <div class="sheet-section-label">Soft</div>
+            <div id="sheetSoftRow" class="color-chip-row"></div>
+          </div>
+        </section>
+      </div>
+
+      <div id="splash" class="splash">
+        <div class="splash-eyebrow">ROOM</div>
+        <div class="splash-title">Home</div>
+        <div class="spinner splash-spinner"></div>
+      </div>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+  </html>

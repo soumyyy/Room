@@ -1,0 +1,515 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		13E3B3905F61227D184C2323 /* WiZClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDD93D78214014CC707FEA57 /* WiZClient.swift */; };
+		1457799B504684B34844C35F /* RoomIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D6960A784EFD92AFB31B5BA /* RoomIntents.swift */; };
+		1CBA8B108C7C45A72AFA0509 /* icon_128x128.png in Resources */ = {isa = PBXBuildFile; fileRef = 99C03EDECB70B63FF4B11829 /* icon_128x128.png */; };
+		2BF064C66F7E5F82028DE355 /* icon_16x16@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 6549AF04828E7B3E12766D4B /* icon_16x16@2x.png */; };
+		2F28DB2F28E9457E3BD54234 /* Contents.json in Resources */ = {isa = PBXBuildFile; fileRef = 1E386B35BA6ACEE29F6CF17B /* Contents.json */; };
+		37EA59DF660B69F6E4F9232C /* RoomWidgetMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 724F2532ACAE4A408B6DEEB5 /* RoomWidgetMacApp.swift */; };
+		3C6101C0B321D09FBC6502B0 /* TuyaClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ACE62C350B84DA650620AB5 /* TuyaClient.swift */; };
+		453CFCF4AE9F41995B87B004 /* icon_16x16.png in Resources */ = {isa = PBXBuildFile; fileRef = A1771FCF6E40E4F15F6F8D57 /* icon_16x16.png */; };
+		48619C9C91959A1DF16F83EC /* icon_512x512@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 11A8AADECF00EDE9F2E0B5C7 /* icon_512x512@2x.png */; };
+		5832F5A0E92C5F2567C7EF49 /* icon_32x32@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = D6778600BE2511DEF97C9831 /* icon_32x32@2x.png */; };
+		5BD1AAB983950B95C2DA6224 /* RoomConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADAD48B57323E4398C0C33AC /* RoomConfig.swift */; };
+		6DB0A868F5E1C0070DE2C0DA /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E131591549D1D95EF47DBD /* ContentView.swift */; };
+		ACBD6876BE867434994C5385 /* RoomIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D6960A784EFD92AFB31B5BA /* RoomIntents.swift */; };
+		AD2ADDD203D80324DB9DB7E9 /* icon_512x512.png in Resources */ = {isa = PBXBuildFile; fileRef = F869C7400426FEA9AB483BFB /* icon_512x512.png */; };
+		C85A1A25CC2967C8C1205E23 /* icon_256x256@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 1C9C277EDE754F6042CE25AE /* icon_256x256@2x.png */; };
+		CBCC8F7E502C906EA018D90C /* RoomController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E2FD7EFF52EE51957654E6C /* RoomController.swift */; };
+		CBD41EC16048A14B4450F2D6 /* icon_256x256.png in Resources */ = {isa = PBXBuildFile; fileRef = E46C6E64901EECA95ABFE146 /* icon_256x256.png */; };
+		D1B93647CCC3E0B2E186F072 /* icon_128x128@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = DAAAB321E128113F3F0BDF35 /* icon_128x128@2x.png */; };
+		ED8BB7E628F0297F364EBE75 /* RoomWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B5775CA011515EC4044E133 /* RoomWidget.swift */; };
+		EDA4ED152733039FA6E32FD3 /* icon_32x32.png in Resources */ = {isa = PBXBuildFile; fileRef = 99E559254FFE394AC8ED76CE /* icon_32x32.png */; };
+		F098935BCF2D616FFEB06193 /* TuyaClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ACE62C350B84DA650620AB5 /* TuyaClient.swift */; };
+		F10BF685299469BE99720E42 /* RoomConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADAD48B57323E4398C0C33AC /* RoomConfig.swift */; };
+		F4B08DFEBDCE6F2F85137794 /* WiZClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDD93D78214014CC707FEA57 /* WiZClient.swift */; };
+		FB57F6795ECD7A3B0A1AE431 /* RoomWidgetMacWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = BE3D6338463691ED597E889E /* RoomWidgetMacWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		FB677367F3F4E9D4AC36C076 /* RoomController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E2FD7EFF52EE51957654E6C /* RoomController.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		30737F25EFF6F276A0646BEA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D683C2ED94A5F8F88EF7ADE3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 513D4D64830648783A6A5498;
+			remoteInfo = RoomWidgetMacWidgets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		CA9845237D6F88A35EFB5B3C /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				FB57F6795ECD7A3B0A1AE431 /* RoomWidgetMacWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		11A8AADECF00EDE9F2E0B5C7 /* icon_512x512@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon_512x512@2x.png"; sourceTree = "<group>"; };
+		1ACE62C350B84DA650620AB5 /* TuyaClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuyaClient.swift; sourceTree = "<group>"; };
+		1C9C277EDE754F6042CE25AE /* icon_256x256@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon_256x256@2x.png"; sourceTree = "<group>"; };
+		1E386B35BA6ACEE29F6CF17B /* Contents.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Contents.json; sourceTree = "<group>"; };
+		23E131591549D1D95EF47DBD /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		3D4A85380A2169311A019ED6 /* RoomWidgetMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RoomWidgetMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6549AF04828E7B3E12766D4B /* icon_16x16@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon_16x16@2x.png"; sourceTree = "<group>"; };
+		724F2532ACAE4A408B6DEEB5 /* RoomWidgetMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomWidgetMacApp.swift; sourceTree = "<group>"; };
+		7B5775CA011515EC4044E133 /* RoomWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomWidget.swift; sourceTree = "<group>"; };
+		8D6960A784EFD92AFB31B5BA /* RoomIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomIntents.swift; sourceTree = "<group>"; };
+		8E2FD7EFF52EE51957654E6C /* RoomController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomController.swift; sourceTree = "<group>"; };
+		99C03EDECB70B63FF4B11829 /* icon_128x128.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = icon_128x128.png; sourceTree = "<group>"; };
+		99E559254FFE394AC8ED76CE /* icon_32x32.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = icon_32x32.png; sourceTree = "<group>"; };
+		A1771FCF6E40E4F15F6F8D57 /* icon_16x16.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = icon_16x16.png; sourceTree = "<group>"; };
+		ADAD48B57323E4398C0C33AC /* RoomConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomConfig.swift; sourceTree = "<group>"; };
+		BE3D6338463691ED597E889E /* RoomWidgetMacWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RoomWidgetMacWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		D6778600BE2511DEF97C9831 /* icon_32x32@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon_32x32@2x.png"; sourceTree = "<group>"; };
+		DAAAB321E128113F3F0BDF35 /* icon_128x128@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon_128x128@2x.png"; sourceTree = "<group>"; };
+		E46C6E64901EECA95ABFE146 /* icon_256x256.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = icon_256x256.png; sourceTree = "<group>"; };
+		F869C7400426FEA9AB483BFB /* icon_512x512.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = icon_512x512.png; sourceTree = "<group>"; };
+		FDD93D78214014CC707FEA57 /* WiZClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WiZClient.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0B3CAD3DCB7E8F8178A9FD0F /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				ADAD48B57323E4398C0C33AC /* RoomConfig.swift */,
+				8E2FD7EFF52EE51957654E6C /* RoomController.swift */,
+				8D6960A784EFD92AFB31B5BA /* RoomIntents.swift */,
+				1ACE62C350B84DA650620AB5 /* TuyaClient.swift */,
+				FDD93D78214014CC707FEA57 /* WiZClient.swift */,
+			);
+			name = Shared;
+			path = Sources/Shared;
+			sourceTree = "<group>";
+		};
+		277A3725C1D14E99AE66584E = {
+			isa = PBXGroup;
+			children = (
+				773911DDCB368E424263F47F /* App */,
+				581E11F2C4D223F6BFAC4DDD /* Assets */,
+				0B3CAD3DCB7E8F8178A9FD0F /* Shared */,
+				690191F7EA75841B291979B6 /* Widget */,
+				52CE0436E8EA52C338EC6C49 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		52CE0436E8EA52C338EC6C49 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				3D4A85380A2169311A019ED6 /* RoomWidgetMac.app */,
+				BE3D6338463691ED597E889E /* RoomWidgetMacWidgets.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		581E11F2C4D223F6BFAC4DDD /* Assets */ = {
+			isa = PBXGroup;
+			children = (
+				A7D96E935CE4FF23C163AA2C /* AppIcon.appiconset */,
+			);
+			path = Assets;
+			sourceTree = "<group>";
+		};
+		690191F7EA75841B291979B6 /* Widget */ = {
+			isa = PBXGroup;
+			children = (
+				7B5775CA011515EC4044E133 /* RoomWidget.swift */,
+			);
+			name = Widget;
+			path = Sources/Widget;
+			sourceTree = "<group>";
+		};
+		773911DDCB368E424263F47F /* App */ = {
+			isa = PBXGroup;
+			children = (
+				23E131591549D1D95EF47DBD /* ContentView.swift */,
+				724F2532ACAE4A408B6DEEB5 /* RoomWidgetMacApp.swift */,
+			);
+			name = App;
+			path = Sources/App;
+			sourceTree = "<group>";
+		};
+		A7D96E935CE4FF23C163AA2C /* AppIcon.appiconset */ = {
+			isa = PBXGroup;
+			children = (
+				1E386B35BA6ACEE29F6CF17B /* Contents.json */,
+				A1771FCF6E40E4F15F6F8D57 /* icon_16x16.png */,
+				6549AF04828E7B3E12766D4B /* icon_16x16@2x.png */,
+				99E559254FFE394AC8ED76CE /* icon_32x32.png */,
+				D6778600BE2511DEF97C9831 /* icon_32x32@2x.png */,
+				99C03EDECB70B63FF4B11829 /* icon_128x128.png */,
+				DAAAB321E128113F3F0BDF35 /* icon_128x128@2x.png */,
+				E46C6E64901EECA95ABFE146 /* icon_256x256.png */,
+				1C9C277EDE754F6042CE25AE /* icon_256x256@2x.png */,
+				F869C7400426FEA9AB483BFB /* icon_512x512.png */,
+				11A8AADECF00EDE9F2E0B5C7 /* icon_512x512@2x.png */,
+			);
+			path = AppIcon.appiconset;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		2AB4E5A137B4A47BA1694952 /* RoomWidgetMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A718B1DA914F6BE71BBA18A4 /* Build configuration list for PBXNativeTarget "RoomWidgetMac" */;
+			buildPhases = (
+				B72D1716FE44F75331666563 /* Sources */,
+				DCC723FD8911AD0B2E2AC4D5 /* Resources */,
+				CA9845237D6F88A35EFB5B3C /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2C73F077ABC54778C69EAEAC /* PBXTargetDependency */,
+			);
+			name = RoomWidgetMac;
+			packageProductDependencies = (
+			);
+			productName = RoomWidgetMac;
+			productReference = 3D4A85380A2169311A019ED6 /* RoomWidgetMac.app */;
+			productType = "com.apple.product-type.application";
+		};
+		513D4D64830648783A6A5498 /* RoomWidgetMacWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E124CD76F8E6FC529411617B /* Build configuration list for PBXNativeTarget "RoomWidgetMacWidgets" */;
+			buildPhases = (
+				113567B588315EB3A01FE138 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RoomWidgetMacWidgets;
+			packageProductDependencies = (
+			);
+			productName = RoomWidgetMacWidgets;
+			productReference = BE3D6338463691ED597E889E /* RoomWidgetMacWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D683C2ED94A5F8F88EF7ADE3 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 11DD8ADEE1EFECEE72A87939 /* Build configuration list for PBXProject "RoomWidgetMac" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 277A3725C1D14E99AE66584E;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 52CE0436E8EA52C338EC6C49 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				2AB4E5A137B4A47BA1694952 /* RoomWidgetMac */,
+				513D4D64830648783A6A5498 /* RoomWidgetMacWidgets */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		DCC723FD8911AD0B2E2AC4D5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2F28DB2F28E9457E3BD54234 /* Contents.json in Resources */,
+				1CBA8B108C7C45A72AFA0509 /* icon_128x128.png in Resources */,
+				D1B93647CCC3E0B2E186F072 /* icon_128x128@2x.png in Resources */,
+				453CFCF4AE9F41995B87B004 /* icon_16x16.png in Resources */,
+				2BF064C66F7E5F82028DE355 /* icon_16x16@2x.png in Resources */,
+				CBD41EC16048A14B4450F2D6 /* icon_256x256.png in Resources */,
+				C85A1A25CC2967C8C1205E23 /* icon_256x256@2x.png in Resources */,
+				EDA4ED152733039FA6E32FD3 /* icon_32x32.png in Resources */,
+				5832F5A0E92C5F2567C7EF49 /* icon_32x32@2x.png in Resources */,
+				AD2ADDD203D80324DB9DB7E9 /* icon_512x512.png in Resources */,
+				48619C9C91959A1DF16F83EC /* icon_512x512@2x.png in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		113567B588315EB3A01FE138 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5BD1AAB983950B95C2DA6224 /* RoomConfig.swift in Sources */,
+				CBCC8F7E502C906EA018D90C /* RoomController.swift in Sources */,
+				1457799B504684B34844C35F /* RoomIntents.swift in Sources */,
+				ED8BB7E628F0297F364EBE75 /* RoomWidget.swift in Sources */,
+				3C6101C0B321D09FBC6502B0 /* TuyaClient.swift in Sources */,
+				13E3B3905F61227D184C2323 /* WiZClient.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B72D1716FE44F75331666563 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6DB0A868F5E1C0070DE2C0DA /* ContentView.swift in Sources */,
+				F10BF685299469BE99720E42 /* RoomConfig.swift in Sources */,
+				FB677367F3F4E9D4AC36C076 /* RoomController.swift in Sources */,
+				ACBD6876BE867434994C5385 /* RoomIntents.swift in Sources */,
+				37EA59DF660B69F6E4F9232C /* RoomWidgetMacApp.swift in Sources */,
+				F098935BCF2D616FFEB06193 /* TuyaClient.swift in Sources */,
+				F4B08DFEBDCE6F2F85137794 /* WiZClient.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		2C73F077ABC54778C69EAEAC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 513D4D64830648783A6A5498 /* RoomWidgetMacWidgets */;
+			targetProxy = 30737F25EFF6F276A0646BEA /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		713518A68AFB246F461A57A4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Config/AppInfo.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.soumya.roomwidgetmac;
+				PRODUCT_NAME = Room;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		9BFCE95E211AF7AAADF72AAA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Config/WidgetInfo.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @executable_path/../../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.soumya.roomwidgetmac.widgets;
+				PRODUCT_NAME = RoomWidgets;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
+		B03864F2730B9DCA6523B999 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Config/AppInfo.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.soumya.roomwidgetmac;
+				PRODUCT_NAME = Room;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		B4A21797FD88F342A085AE35 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		E245FC1D5D1EE50E500D43A3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		EA94AA41DF0822D34BDF7981 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Config/WidgetInfo.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @executable_path/../../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.soumya.roomwidgetmac.widgets;
+				PRODUCT_NAME = RoomWidgets;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		11DD8ADEE1EFECEE72A87939 /* Build configuration list for PBXProject "RoomWidgetMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E245FC1D5D1EE50E500D43A3 /* Debug */,
+				B4A21797FD88F342A085AE35 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A718B1DA914F6BE71BBA18A4 /* Build configuration list for PBXNativeTarget "RoomWidgetMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B03864F2730B9DCA6523B999 /* Debug */,
+				713518A68AFB246F461A57A4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E124CD76F8E6FC529411617B /* Build configuration list for PBXNativeTarget "RoomWidgetMacWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EA94AA41DF0822D34BDF7981 /* Debug */,
+				9BFCE95E211AF7AAADF72AAA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = D683C2ED94A5F8F88EF7ADE3 /* Project object */;
+}

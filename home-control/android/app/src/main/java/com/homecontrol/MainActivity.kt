@@ -1,7 +1,9 @@
 package com.homecontrol
 
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.view.View
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
@@ -17,6 +19,14 @@ class MainActivity : ReactActivity() {
     // This is required for expo-splash-screen.
     setTheme(R.style.AppTheme);
     super.onCreate(null)
+
+    window.navigationBarColor = Color.BLACK
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      @Suppress("DEPRECATION")
+      window.decorView.systemUiVisibility =
+        window.decorView.systemUiVisibility and View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR.inv()
+    }
   }
 
   /**

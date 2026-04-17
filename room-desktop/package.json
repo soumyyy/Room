@@ -1,0 +1,47 @@
+{
+  "name": "room-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone macOS app for Room",
+  "author": "Soumya",
+  "main": "src/main/index.cjs",
+  "scripts": {
+    "dev": "electron .",
+    "dist:mac": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg --arm64 --publish never",
+    "dist:mac:intel": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg --x64 --publish never"
+  },
+  "build": {
+    "appId": "com.soumya.roomdesktop",
+    "productName": "Room",
+    "electronDist": "node_modules/electron/dist",
+    "icon": "assets/Icon-1024.png",
+    "asar": true,
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.lifestyle",
+      "icon": "assets/Icon-1024.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "artifactName": "Room-${version}-${arch}.${ext}"
+    },
+    "dmg": {
+      "artifactName": "Room-${version}-${arch}.${ext}"
+    }
+  },
+  "devDependencies": {
+    "electron": "^37.2.0",
+    "electron-builder": "^25.1.8"
+  }
+}

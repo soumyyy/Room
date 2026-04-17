@@ -2,6 +2,12 @@
   "expo": {
     "name": "Room",
     "slug": "room",
-    "version": "1.0.0"
+    "version": "1.0.0",
+    "newArchEnabled": false,
+    "extra": {
+      "eas": {
+        "projectId": "9a0cab69-d38f-47de-a853-1afc31f64495"
+      }
+    }
   }
 }
