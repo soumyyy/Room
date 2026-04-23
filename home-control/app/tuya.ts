@@ -27,6 +27,14 @@ const tokenCache = {
   expiresAt: 0,
 };
 
+function normalizeNetworkError(error: unknown, fallback: string) {
+  if (error instanceof TypeError) {
+    return new Error(fallback);
+  }
+
+  return error instanceof Error ? error : new Error(fallback);
+}
+
 function sha256(input: string): string {
   return CryptoJS.SHA256(input).toString(CryptoJS.enc.Hex);
 }
@@ -90,10 +98,15 @@ async function getAccessToken(forceRefresh = false): Promise<string> {
   const requestPath = '/v1.0/token?grant_type=1';
   const headers = buildSignedHeaders({ method: 'GET', requestPath });
 
-  const response = await fetch(`${TUYA_CLOUD.apiBaseUrl}${requestPath}`, {
-    method: 'GET',
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${TUYA_CLOUD.apiBaseUrl}${requestPath}`, {
+      method: 'GET',
+      headers,
+    });
+  } catch (error) {
+    throw normalizeNetworkError(error, 'Unable to reach Tuya Cloud.');
+  }
 
   const payload = (await response.json()) as Record<string, unknown>;
 
@@ -128,11 +141,16 @@ async function tuyaRequest<T>({
       ...(bodyString ? { 'Content-Type': 'application/json' } : {}),
     };
 
-    const response = await fetch(`${TUYA_CLOUD.apiBaseUrl}${requestPath}`, {
-      method,
-      headers,
-      ...(bodyString ? { body: bodyString } : {}),
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${TUYA_CLOUD.apiBaseUrl}${requestPath}`, {
+        method,
+        headers,
+        ...(bodyString ? { body: bodyString } : {}),
+      });
+    } catch (error) {
+      throw normalizeNetworkError(error, 'Unable to reach Tuya Cloud.');
+    }
 
     const payload = (await response.json()) as Record<string, unknown>;
 

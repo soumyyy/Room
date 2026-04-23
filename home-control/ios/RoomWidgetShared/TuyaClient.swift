@@ -46,16 +46,6 @@ actor TuyaClient {
   private let session = URLSession.shared
   private var tokenCache = TuyaTokenCache()
 
-  func getACStatus() async throws -> AcScene {
-    let status = try await request(
-      method: "GET",
-      path: "/v2.0/infrareds/\(RoomConfig.tuya.infraredID)/remotes/\(RoomConfig.tuya.acRemoteID)/ac/status",
-      expecting: TuyaAcStatusResult.self
-    )
-
-    return normalize(scene: status)
-  }
-
   func sendACScene(_ scene: AcScene) async throws {
     _ = try await request(
       method: "POST",
@@ -153,6 +143,7 @@ actor TuyaClient {
     guard let url = URL(string: requestPath, relativeTo: RoomConfig.tuya.apiBaseURL) else {
       throw RoomNetworkError.invalidURL
     }
+
     var request = URLRequest(url: url)
     request.httpMethod = "GET"
     signedHeaders(method: "GET", requestPath: requestPath, bodyData: Data(), accessToken: "")
@@ -216,48 +207,6 @@ actor TuyaClient {
 
     return headers
   }
-
-  private func normalize(scene status: TuyaAcStatusResult) -> AcScene {
-    let power = status.powerOpen ?? ((status.power ?? 0) == 1)
-
-    return AcScene(
-      power: power ? 1 : 0,
-      mode: status.mode ?? 0,
-      temp: status.temperature ?? status.temp ?? 24,
-      wind: status.fan ?? status.wind ?? 1
-    )
-  }
-}
-
-private struct TuyaAcStatusResult: Decodable {
-  let powerOpen: Bool?
-  let power: Int?
-  let mode: Int?
-  let temp: Int?
-  let temperature: Int?
-  let wind: Int?
-  let fan: Int?
-
-  private enum CodingKeys: String, CodingKey {
-    case powerOpen = "power_open"
-    case power
-    case mode
-    case temp
-    case temperature
-    case wind
-    case fan
-  }
-
-  init(from decoder: Decoder) throws {
-    let container = try decoder.container(keyedBy: CodingKeys.self)
-    powerOpen = try container.decodeIfPresent(Bool.self, forKey: .powerOpen)
-    power = try container.decodeFlexibleIntIfPresent(forKey: .power)
-    mode = try container.decodeFlexibleIntIfPresent(forKey: .mode)
-    temp = try container.decodeFlexibleIntIfPresent(forKey: .temp)
-    temperature = try container.decodeFlexibleIntIfPresent(forKey: .temperature)
-    wind = try container.decodeFlexibleIntIfPresent(forKey: .wind)
-    fan = try container.decodeFlexibleIntIfPresent(forKey: .fan)
-  }
 }
 
 private extension Digest {
@@ -269,19 +218,5 @@ private extension Digest {
 private extension Data {
   var hexStringUppercased: String {
     map { String(format: "%02X", $0) }.joined()
-  }
-}
-
-private extension KeyedDecodingContainer {
-  func decodeFlexibleIntIfPresent(forKey key: Key) throws -> Int? {
-    if let value = try? decodeIfPresent(Int.self, forKey: key) {
-      return value
-    }
-
-    if let value = try? decodeIfPresent(String.self, forKey: key) {
-      return value.flatMap(Int.init)
-    }
-
-    return nil
   }
 }

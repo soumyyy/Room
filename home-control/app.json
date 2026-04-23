@@ -3,7 +3,19 @@
     "name": "Room",
     "slug": "room",
     "version": "1.0.0",
+    "icon": "./assets/Icon-1024.png",
     "newArchEnabled": false,
+    "ios": {
+      "infoPlist": {
+        "CFBundleIconName": "AppIcon",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        },
+        "NSLocalNetworkUsageDescription": "Room uses your local network to control WiZ lights.",
+        "RCTNewArchEnabled": false
+      },
+      "bundleIdentifier": "org.name.homecontrol"
+    },
     "extra": {
       "eas": {
         "projectId": "9a0cab69-d38f-47de-a853-1afc31f64495"

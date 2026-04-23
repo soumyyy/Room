@@ -12,7 +12,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import Slider from '@react-native-community/slider';
 
 import {
   BULB_GROUPS,
@@ -69,6 +68,7 @@ const INITIAL_SCENE: AcScene = {
 };
 
 const DEFAULT_BULB_BRIGHTNESS = 68;
+const BRIGHTNESS_PRESETS = [25, 50, 75, 100];
 
 const MODE_OPTIONS: Array<{ value: ModeValue; label: string }> = [
   { value: 0, label: 'Cool' },
@@ -397,7 +397,7 @@ export default function AppScreen() {
 
   const tuyaReady = isTuyaConfigured();
   const wizDirectAvailable = isUsingDirectWiz();
-  const wizReady = wizDirectAvailable || TUYA_CLOUD.backendBaseUrl.startsWith('http');
+  const wizReady = wizDirectAvailable;
   const acDisabled = !tuyaReady || acBusy || loadingStatus;
 
   function showErrorToast(message: string) {
@@ -414,7 +414,7 @@ export default function AppScreen() {
 
   async function loadStatus(options?: { showLoader?: boolean }) {
     if (!tuyaReady) {
-      showErrorToast('Set the backend URL first.');
+      showErrorToast('Fill in your Tuya credentials in app/config.ts.');
       setLoadingStatus(false);
       return;
     }
@@ -427,7 +427,7 @@ export default function AppScreen() {
       const status = await getAcStatus();
       setAc(normalizeStatus(status));
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to reach the backend';
+      const message = error instanceof Error ? error.message : 'Unable to reach Tuya Cloud';
       showErrorToast(message);
     } finally {
       if (options?.showLoader ?? true) {
@@ -444,9 +444,7 @@ export default function AppScreen() {
       const message =
         error instanceof Error
           ? error.message
-          : wizDirectAvailable
-            ? 'Unable to reach the lights'
-            : 'Unable to reach the WiZ backend';
+          : 'Unable to reach the lights';
       showErrorToast(message);
     }
   }
@@ -460,9 +458,7 @@ export default function AppScreen() {
       const message =
         error instanceof Error
           ? error.message
-          : wizDirectAvailable
-            ? 'Unable to verify light status'
-            : 'Unable to reach the WiZ backend';
+          : 'Unable to verify light status';
       showErrorToast(message);
       return null;
     }
@@ -534,9 +530,7 @@ export default function AppScreen() {
       const message =
         error instanceof Error
           ? error.message
-          : wizDirectAvailable
-            ? 'WiZ group command failed'
-            : 'WiZ backend command failed';
+          : 'WiZ group command failed';
       showErrorToast(message);
       return false;
     }
@@ -747,9 +741,6 @@ export default function AppScreen() {
 
             <View style={styles.acTempCenter}>
               <Text style={styles.acTempValue}>{ac.temp}°</Text>
-              <Text style={styles.acTempSub}>
-                {modeLabel(ac.mode)} · {windLabel(ac.wind)}
-              </Text>
             </View>
 
             <Pressable
@@ -985,6 +976,22 @@ export default function AppScreen() {
           }
         }
 
+        async function applyBrightness(nextValue: number) {
+          const brightness = clampBrightness(nextValue);
+          const previousBrightness = sheetBrightness;
+          setSheetBrightness(brightness);
+
+          const ok = await runGroupCommand(
+            sheetGroup!,
+            (b) => ({ ...b, isOn: true, brightness }),
+            { state: true, dimming: brightness },
+          );
+
+          if (!ok) {
+            setSheetBrightness(previousBrightness);
+          }
+        }
+
         return (
           <Modal
             visible={colorSheetGroupId !== null}
@@ -1015,25 +1022,63 @@ export default function AppScreen() {
                   <Text style={styles.sheetSectionLabel}>Brightness</Text>
                   <Text style={styles.sheetBrightnessValue}>{sheetBrightness}%</Text>
                 </View>
-                <Slider
-                  style={styles.sheetSlider}
-                  minimumValue={10}
-                  maximumValue={100}
-                  step={1}
-                  value={sheetBrightness}
-                  onValueChange={(v) => setSheetBrightness(Math.round(v))}
-                  onSlidingComplete={(v) =>
-                    void runGroupCommand(
-                      sheetGroup!,
-                      (b) => b,
-                      { dimming: clampBrightness(Math.round(v)) },
-                    )
-                  }
-                  minimumTrackTintColor="#0a84ff"
-                  maximumTrackTintColor="#3a3a3c"
-                  thumbTintColor="#ffffff"
-                  disabled={sheetGroupBusy}
-                />
+                <View style={styles.brightnessControls}>
+                  <Pressable
+                    onPress={() => void applyBrightness(sheetBrightness - 10)}
+                    style={({ pressed }) => [
+                      styles.brightnessAction,
+                      pressed ? styles.pressed : null,
+                      sheetGroupBusy || sheetBrightness <= 10 ? styles.disabled : null,
+                    ]}
+                    disabled={sheetGroupBusy || sheetBrightness <= 10}
+                  >
+                    <Text style={styles.brightnessActionText}>−</Text>
+                  </Pressable>
+
+                  <View style={styles.brightnessValuePill}>
+                    <Text style={styles.brightnessValuePillText}>{sheetBrightness}%</Text>
+                  </View>
+
+                  <Pressable
+                    onPress={() => void applyBrightness(sheetBrightness + 10)}
+                    style={({ pressed }) => [
+                      styles.brightnessAction,
+                      pressed ? styles.pressed : null,
+                      sheetGroupBusy || sheetBrightness >= 100 ? styles.disabled : null,
+                    ]}
+                    disabled={sheetGroupBusy || sheetBrightness >= 100}
+                  >
+                    <Text style={styles.brightnessActionText}>+</Text>
+                  </Pressable>
+                </View>
+
+                <View style={styles.brightnessPresetRow}>
+                  {BRIGHTNESS_PRESETS.map((value) => {
+                    const active = sheetBrightness === value;
+                    return (
+                      <Pressable
+                        key={value}
+                        onPress={() => void applyBrightness(value)}
+                        style={({ pressed }) => [
+                          styles.brightnessPresetChip,
+                          active ? styles.brightnessPresetChipActive : null,
+                          pressed ? styles.pressed : null,
+                          sheetGroupBusy ? styles.disabled : null,
+                        ]}
+                        disabled={sheetGroupBusy}
+                      >
+                        <Text
+                          style={[
+                            styles.brightnessPresetChipLabel,
+                            active ? styles.brightnessPresetChipLabelActive : null,
+                          ]}
+                        >
+                          {value}%
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
 
               <View style={styles.sheetSection}>
@@ -1164,7 +1209,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
   roomBtnTextIn: {
-    color: '#636366',
+    color: '#ffffff',
   },
   roomBtnTextOut: {
     color: '#000000',
@@ -1293,7 +1338,11 @@ const styles = StyleSheet.create({
   acTempRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: '100%',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    width: 300,
+    maxWidth: '90%',
+    minHeight: 84,
   },
   stepBtn: {
     width: 48,
@@ -1314,20 +1363,16 @@ const styles = StyleSheet.create({
   acTempCenter: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   acTempValue: {
     color: '#ffffff',
     fontSize: 72,
     fontWeight: Platform.OS === 'ios' ? '700' : '700',
     letterSpacing: Platform.OS === 'ios' ? -3 : -1,
-    lineHeight: 76,
-  },
-  acTempSub: {
-    color: '#48484a',
-    fontSize: 14,
-    fontWeight: '400',
-    marginTop: 6,
-    letterSpacing: 0.1,
+    lineHeight: 82,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
 
   // ── AC controls wrapper ───────────────────────────────────────────────────
@@ -1341,9 +1386,11 @@ const styles = StyleSheet.create({
   // ── Presets ───────────────────────────────────────────────────────────────
   presetScroll: {
     marginHorizontal: -10,
-    marginBottom: 32,
+    marginBottom: 18,
   },
   presetRail: {
+    flexGrow: 1,
+    justifyContent: 'center',
     paddingHorizontal: 10,
     gap: 10,
   },
@@ -1586,10 +1633,70 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-  sheetSlider: {
-    width: '100%',
-    height: 40,
-    marginTop: -10,
+  brightnessControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  brightnessAction: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#111214',
+    borderWidth: 1,
+    borderColor: '#1f2023',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  brightnessActionText: {
+    color: '#ffffff',
+    fontSize: 24,
+    fontWeight: '500',
+    marginTop: -1,
+  },
+  brightnessValuePill: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 16,
+    backgroundColor: '#111214',
+    borderWidth: 1,
+    borderColor: '#1f2023',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  brightnessValuePillText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.1,
+  },
+  brightnessPresetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 12,
+  },
+  brightnessPresetChip: {
+    minWidth: 64,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: '#111214',
+    borderWidth: 1,
+    borderColor: '#1f2023',
+    alignItems: 'center',
+  },
+  brightnessPresetChipActive: {
+    backgroundColor: '#0a84ff',
+    borderColor: '#0a84ff',
+  },
+  brightnessPresetChipLabel: {
+    color: '#c7c7cc',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  brightnessPresetChipLabelActive: {
+    color: '#ffffff',
   },
   colorSwatchGrid: {
     flexDirection: 'row',

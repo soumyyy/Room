@@ -6,12 +6,9 @@
     "start": "node ./node_modules/expo/bin/cli start",
     "android": "node ./node_modules/expo/bin/cli run:android",
     "ios": "node ./node_modules/expo/bin/cli run:ios",
-    "web": "node ./node_modules/expo/bin/cli start --web",
-    "backend": "node --env-file=backend/.env backend/server.mjs",
-    "backend:dev": "node --watch --env-file=backend/.env backend/server.mjs"
+    "web": "node ./node_modules/expo/bin/cli start --web"
   },
   "dependencies": {
-    "@react-native-community/slider": "5.0.1",
     "buffer": "^6.0.3",
     "crypto-js": "^4.2.0",
     "expo": "~54.0.33",

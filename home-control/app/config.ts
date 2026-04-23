@@ -16,7 +16,6 @@ export interface TuyaCloudConfig {
   clientId: string;
   clientSecret: string;
   apiBaseUrl: string;
-  backendBaseUrl: string;
 }
 
 // ── WiZ bulbs ──────────────────────────────────────────────────────────────
@@ -47,5 +46,4 @@ export const TUYA_CLOUD: TuyaCloudConfig = {
   clientId: 'wcumxxy4hrjaurwdd8dg',
   clientSecret: 'f74fbd3a47a94dd29ce478335ac26362',
   apiBaseUrl: 'https://openapi.tuyain.com',
-  backendBaseUrl: 'http://192.168.29.30:8787',
 };

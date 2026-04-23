@@ -30,32 +30,9 @@ struct WizPilot: Codable, Sendable {
   let b: Int?
 }
 
-struct SavedBulbState: Codable, Sendable {
-  let id: String
-  let ip: String
-  let pilot: WizPilot
-}
-
-struct SavedRoomState: Codable, Sendable {
-  let ac: AcScene?
-  let bulbs: [SavedBulbState]
-  let savedAt: Date
-
-  var hasRestorableState: Bool {
-    if let ac, ac.power == 1 {
-      return true
-    }
-
-    return bulbs.contains { $0.pilot.state }
-  }
-}
-
 enum RoomConfig {
-  static let widgetKind = "com.soumya.roomwidgetmac.actions"
-  static let sharedStateSuite = "com.soumya.roomwidgetmac.room-state"
-  static let sharedStateKey = "room.saved-state"
+  static let widgetKind = "com.soumymaheshwri.room.actions"
   static let wizPort: UInt16 = 38899
-  static let wizReadTimeoutNanoseconds: UInt64 = 1_500_000_000
   static let wizRetryDelayNanoseconds: UInt64 = 75_000_000
 
   static let bulbs: [BulbConfig] = [
@@ -70,7 +47,7 @@ enum RoomConfig {
     clientSecret: "f74fbd3a47a94dd29ce478335ac26362",
     apiBaseURL: URL(string: "https://openapi.tuyain.com")!,
     infraredID: "d7629f91c10f8aaa6dbtaw",
-    acRemoteID: "d7c7ddecd3c98a5a00nezc",
+    acRemoteID: "d7c7ddecd3c98a5a00nezc"
   )
 
   static let enterScene = AcScene(power: 1, mode: 0, temp: 24, wind: 1)
@@ -78,23 +55,4 @@ enum RoomConfig {
 
   static let enterLights = WizPilot(state: true, dimming: 100, temp: 4200, r: nil, g: nil, b: nil)
   static let leaveLights = WizPilot(state: false, dimming: nil, temp: nil, r: nil, g: nil, b: nil)
-}
-
-enum RoomAction: String, Sendable {
-  case enter
-  case leave
-
-  var title: String {
-    switch self {
-    case .enter: "Enter Room"
-    case .leave: "Leave Room"
-    }
-  }
-
-  var symbolName: String {
-    switch self {
-    case .enter: "door.left.hand.open"
-    case .leave: "figure.walk.departure"
-    }
-  }
 }

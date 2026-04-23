@@ -1,6 +1,6 @@
 import { NativeModules } from 'react-native';
 
-import { TUYA_CLOUD, type BulbConfig } from './config';
+import type { BulbConfig } from './config';
 import type { WizPilotStatus } from './wizDirect';
 
 export type { WizPilotStatus } from './wizDirect';
@@ -18,32 +18,26 @@ export function isUsingDirectWiz() {
 }
 
 export async function getWizStatuses(bulbs: BulbConfig[]): Promise<WizPilotStatus[]> {
-  if (hasDirectWizSupport()) {
-    const direct = require('./wizDirect') as typeof import('./wizDirect');
-    return direct.getWizStatuses(bulbs);
+  if (!hasDirectWizSupport()) {
+    throw new Error(
+      'WiZ direct control is unavailable in this build. Reinstall a full native app build.',
+    );
   }
 
-  if (!TUYA_CLOUD.backendBaseUrl.startsWith('http')) {
-    throw new Error('WiZ backend URL is not configured.');
-  }
-
-  const cloud = require('./wizCloud') as typeof import('./wizCloud');
-  return cloud.getWizStatuses(TUYA_CLOUD.backendBaseUrl, bulbs);
+  const direct = require('./wizDirect') as typeof import('./wizDirect');
+  return direct.getWizStatuses(bulbs);
 }
 
 export async function sendWizCommand(
   bulbs: BulbConfig[],
   params: Record<string, unknown>,
 ): Promise<WizPilotStatus[]> {
-  if (hasDirectWizSupport()) {
-    const direct = require('./wizDirect') as typeof import('./wizDirect');
-    return direct.sendWizCommand(bulbs, params);
+  if (!hasDirectWizSupport()) {
+    throw new Error(
+      'WiZ direct control is unavailable in this build. Reinstall a full native app build.',
+    );
   }
 
-  if (!TUYA_CLOUD.backendBaseUrl.startsWith('http')) {
-    throw new Error('WiZ backend URL is not configured.');
-  }
-
-  const cloud = require('./wizCloud') as typeof import('./wizCloud');
-  return cloud.sendWizCommand(TUYA_CLOUD.backendBaseUrl, { bulbs, params });
+  const direct = require('./wizDirect') as typeof import('./wizDirect');
+  return direct.sendWizCommand(bulbs, params);
 }
