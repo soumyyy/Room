@@ -3,6 +3,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  GestureResponderEvent,
+  LayoutChangeEvent,
   Modal,
   Platform,
   Pressable,
@@ -46,6 +48,7 @@ type Preset = {
 };
 
 type BulbState = BulbConfig & {
+  available: boolean | null;
   isOn: boolean;
   brightness: number;
   busy: boolean;
@@ -68,7 +71,7 @@ const INITIAL_SCENE: AcScene = {
 };
 
 const DEFAULT_BULB_BRIGHTNESS = 68;
-const BRIGHTNESS_PRESETS = [25, 50, 75, 100];
+const DEV_LIGHT_UI_PREVIEW = __DEV__;
 
 const MODE_OPTIONS: Array<{ value: ModeValue; label: string }> = [
   { value: 0, label: 'Cool' },
@@ -84,6 +87,12 @@ const FAN_OPTIONS: Array<{ value: WindValue; label: string }> = [
   { value: 2, label: 'Mid' },
   { value: 3, label: 'High' },
 ];
+
+const ALL_LIGHTS_GROUP: BulbGroupConfig = {
+  id: 'all',
+  name: 'Lights',
+  bulbIds: BULBS.map((bulb) => bulb.id),
+};
 
 const PRESETS: Preset[] = [
   {
@@ -114,100 +123,68 @@ const INNER_COLOR_RADIUS = 58;
 
 const GROUP_COLOR_PRESETS: GroupColorPreset[] = [
   {
-    id: 'rose',
-    name: 'Rose',
-    hex: '#ff5d73',
+    id: 'red',
+    name: 'Red',
+    hex: '#ff3b30',
     ring: 'outer',
     angle: -90,
-    params: { state: true, r: 255, g: 93, b: 115 },
+    params: { state: true, r: 255, g: 59, b: 48 },
   },
   {
-    id: 'coral',
-    name: 'Coral',
-    hex: '#ff7a45',
+    id: 'orange',
+    name: 'Orange',
+    hex: '#ff9500',
     ring: 'outer',
     angle: -60,
-    params: { state: true, r: 255, g: 122, b: 69 },
+    params: { state: true, r: 255, g: 149, b: 0 },
   },
   {
-    id: 'amber',
-    name: 'Amber',
-    hex: '#ffb000',
+    id: 'yellow',
+    name: 'Yellow',
+    hex: '#ffd60a',
     ring: 'outer',
     angle: -30,
-    params: { state: true, r: 255, g: 176, b: 0 },
+    params: { state: true, r: 255, g: 214, b: 10 },
   },
   {
-    id: 'sun',
-    name: 'Sunlight',
-    hex: '#ffd85a',
+    id: 'green',
+    name: 'Green',
+    hex: '#30d158',
     ring: 'outer',
     angle: 0,
-    params: { state: true, r: 255, g: 216, b: 90 },
+    params: { state: true, r: 48, g: 209, b: 88 },
   },
   {
-    id: 'lime',
-    name: 'Lime',
-    hex: '#c6f432',
+    id: 'cyan',
+    name: 'Cyan',
+    hex: '#00c7be',
     ring: 'outer',
     angle: 30,
-    params: { state: true, r: 198, g: 244, b: 50 },
+    params: { state: true, r: 0, g: 199, b: 190 },
   },
   {
-    id: 'mint',
-    name: 'Mint',
-    hex: '#18e299',
+    id: 'blue',
+    name: 'Blue',
+    hex: '#0a84ff',
     ring: 'outer',
     angle: 60,
-    params: { state: true, r: 24, g: 226, b: 153 },
+    params: { state: true, r: 10, g: 132, b: 255 },
   },
   {
-    id: 'aqua',
-    name: 'Aqua',
-    hex: '#00d9ff',
+    id: 'purple',
+    name: 'Purple',
+    hex: '#bf5af2',
     ring: 'outer',
     angle: 90,
-    params: { state: true, r: 0, g: 217, b: 255 },
-  },
-  {
-    id: 'sky',
-    name: 'Sky Blue',
-    hex: '#4c8dff',
-    ring: 'outer',
-    angle: 120,
-    params: { state: true, r: 76, g: 141, b: 255 },
-  },
-  {
-    id: 'violet',
-    name: 'Violet',
-    hex: '#7269ff',
-    ring: 'outer',
-    angle: 150,
-    params: { state: true, r: 114, g: 105, b: 255 },
-  },
-  {
-    id: 'iris',
-    name: 'Iris',
-    hex: '#a259ff',
-    ring: 'outer',
-    angle: 180,
-    params: { state: true, r: 162, g: 89, b: 255 },
+    params: { state: true, r: 191, g: 90, b: 242 },
   },
   {
     id: 'pink',
     name: 'Pink',
-    hex: '#ff61d2',
+    hex: '#ff2d55',
     ring: 'outer',
-    angle: 210,
-    params: { state: true, r: 255, g: 97, b: 210 },
-  },
-  {
-    id: 'peach',
-    name: 'Peach',
-    hex: '#ff9478',
-    ring: 'outer',
-    angle: 240,
-    params: { state: true, r: 255, g: 148, b: 120 },
+    angle: 120,
+    params: { state: true, r: 255, g: 45, b: 85 },
   },
   {
     id: 'warm-white',
@@ -330,6 +307,7 @@ function sceneToPayload(scene: AcScene): AcScenePayload {
 function createBulbState(bulb: BulbConfig): BulbState {
   return {
     ...bulb,
+    available: null,
     isOn: false,
     brightness: DEFAULT_BULB_BRIGHTNESS,
     busy: false,
@@ -352,6 +330,7 @@ function mergeBulbStatuses(current: BulbState[], statuses: WizPilotStatus[]) {
 
     return {
       ...bulb,
+      available: status.available,
       isOn: status.isOn,
       brightness:
         status.brightness === null ? bulb.brightness : clampBrightness(status.brightness),
@@ -362,6 +341,71 @@ function mergeBulbStatuses(current: BulbState[], statuses: WizPilotStatus[]) {
 
 function bulbsForGroup<T extends BulbConfig>(group: BulbGroupConfig, bulbs: T[]): T[] {
   return bulbs.filter((bulb) => group.bulbIds.includes(bulb.id));
+}
+
+function createPreviewStatuses(bulbs: BulbState[]): WizPilotStatus[] {
+  return bulbs.map((bulb) => ({
+    id: bulb.id,
+    ip: bulb.ip,
+    available: true,
+    isOn: bulb.isOn,
+    brightness: bulb.brightness,
+    r: null,
+    g: null,
+    b: null,
+    temp: null,
+  }));
+}
+
+function BrightnessSlider({
+  value,
+  disabled,
+  onPreview,
+  onCommit,
+}: {
+  value: number;
+  disabled: boolean;
+  onPreview: (value: number) => void;
+  onCommit: (value: number) => void;
+}) {
+  const [trackWidth, setTrackWidth] = useState(1);
+  const fillPercent = ((clampBrightness(value) - 10) / 90) * 100;
+
+  function valueFromEvent(event: GestureResponderEvent) {
+    const x = Math.max(0, Math.min(trackWidth, event.nativeEvent.locationX));
+    return clampBrightness(10 + (x / trackWidth) * 90);
+  }
+
+  function handleLayout(event: LayoutChangeEvent) {
+    setTrackWidth(Math.max(1, event.nativeEvent.layout.width));
+  }
+
+  function handleMove(event: GestureResponderEvent) {
+    if (!disabled) {
+      onPreview(valueFromEvent(event));
+    }
+  }
+
+  function handleRelease(event: GestureResponderEvent) {
+    if (!disabled) {
+      onCommit(valueFromEvent(event));
+    }
+  }
+
+  return (
+    <View
+      style={[styles.brightnessSlider, disabled ? styles.disabled : null]}
+      onLayout={handleLayout}
+      onStartShouldSetResponder={() => !disabled}
+      onMoveShouldSetResponder={() => !disabled}
+      onResponderGrant={handleMove}
+      onResponderMove={handleMove}
+      onResponderRelease={handleRelease}
+      onResponderTerminate={handleRelease}
+    >
+      <View style={[styles.brightnessSliderFill, { width: `${fillPercent}%` }]} />
+    </View>
+  );
 }
 
 function getColorNodePosition(preset: GroupColorPreset) {
@@ -383,6 +427,7 @@ export default function AppScreen() {
   const [selectedGroupColor, setSelectedGroupColor] = useState<Record<string, string>>(() =>
     Object.fromEntries(BULB_GROUPS.map((group) => [group.id, 'warm-white'])),
   );
+  const [lightsSeparated, setLightsSeparated] = useState(false);
   const [inRoom, setInRoom] = useState(true);
   const [roomBusy, setRoomBusy] = useState(false);
   const savedRoomState = useRef<{ ac: AcScene; activeGroupIds: string[] } | null>(null);
@@ -397,7 +442,7 @@ export default function AppScreen() {
 
   const tuyaReady = isTuyaConfigured();
   const wizDirectAvailable = isUsingDirectWiz();
-  const wizReady = wizDirectAvailable;
+  const wizReady = wizDirectAvailable || DEV_LIGHT_UI_PREVIEW;
   const acDisabled = !tuyaReady || acBusy || loadingStatus;
 
   function showErrorToast(message: string) {
@@ -437,6 +482,13 @@ export default function AppScreen() {
   }
 
   async function loadBulbStatus() {
+    if (!wizDirectAvailable && DEV_LIGHT_UI_PREVIEW) {
+      setBulbs((current) =>
+        current.map((bulb) => ({ ...bulb, available: true, busy: false })),
+      );
+      return;
+    }
+
     try {
       const statuses = await getWizStatuses(BULBS);
       setBulbs((current) => mergeBulbStatuses(current, statuses));
@@ -450,6 +502,16 @@ export default function AppScreen() {
   }
 
   async function syncGroupStatus(group: BulbGroupConfig) {
+    if (!wizDirectAvailable && DEV_LIGHT_UI_PREVIEW) {
+      const statuses = createPreviewStatuses(bulbsForGroup(group, bulbs));
+      setBulbs((current) =>
+        current.map((bulb) =>
+          group.bulbIds.includes(bulb.id) ? { ...bulb, available: true, busy: false } : bulb,
+        ),
+      );
+      return statuses;
+    }
+
     try {
       const statuses = await getWizStatuses(bulbsForGroup(group, BULBS));
       setBulbs((current) => mergeBulbStatuses(current, statuses));
@@ -513,6 +575,17 @@ export default function AppScreen() {
       ),
     );
 
+    if (!wizDirectAvailable && DEV_LIGHT_UI_PREVIEW) {
+      setBulbs((current) =>
+        current.map((bulb) =>
+          group.bulbIds.includes(bulb.id)
+            ? { ...optimisticUpdate(bulb), available: true, busy: false }
+            : bulb,
+        ),
+      );
+      return true;
+    }
+
     try {
       const statuses = await sendWizCommand(
         snapshot.map(({ id, name, ip }) => ({ id, name, ip })),
@@ -543,17 +616,87 @@ export default function AppScreen() {
       return;
     }
 
-    const shouldTurnOn = !statuses.some((status) => status.isOn);
+    const availableStatuses = statuses.filter((status) => status.available);
+
+    if (!availableStatuses.length) {
+      showErrorToast(`${group.name} unavailable`);
+      return;
+    }
+
+    const availableIds = new Set(availableStatuses.map((status) => status.id));
+    const availableGroup = {
+      ...group,
+      bulbIds: group.bulbIds.filter((id) => availableIds.has(id)),
+    };
+    const shouldTurnOn = !availableStatuses.some((status) => status.isOn);
 
     await runGroupCommand(
-      group,
+      availableGroup,
       (current) => ({ ...current, isOn: shouldTurnOn }),
       { state: shouldTurnOn },
     );
   }
 
+  async function toggleAllLightsPower() {
+    if (!wizDirectAvailable && DEV_LIGHT_UI_PREVIEW) {
+      const availableStatuses = createPreviewStatuses(bulbs);
+      const shouldTurnOn = !availableStatuses.some((status) => status.isOn);
+
+      await Promise.all(
+        BULB_GROUPS.map((group) =>
+          runGroupCommand(
+            group,
+            (current) => ({ ...current, isOn: shouldTurnOn }),
+            { state: shouldTurnOn },
+          ),
+        ),
+      );
+      return;
+    }
+
+    try {
+      const statuses = await getWizStatuses(BULBS);
+      setBulbs((current) => mergeBulbStatuses(current, statuses));
+
+      const availableStatuses = statuses.filter((status) => status.available);
+
+      if (!availableStatuses.length) {
+        showErrorToast('Lights unavailable');
+        return;
+      }
+
+      const availableIds = new Set(availableStatuses.map((status) => status.id));
+      const shouldTurnOn = !availableStatuses.some((status) => status.isOn);
+
+      await Promise.all(
+        BULB_GROUPS.map((group) => {
+          const availableGroup = {
+            ...group,
+            bulbIds: group.bulbIds.filter((id) => availableIds.has(id)),
+          };
+
+          return availableGroup.bulbIds.length
+            ? runGroupCommand(
+                availableGroup,
+                (current) => ({ ...current, isOn: shouldTurnOn }),
+                { state: shouldTurnOn },
+              )
+            : Promise.resolve(false);
+        }),
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to verify light status';
+      showErrorToast(message);
+    }
+  }
+
   function openColorSheet(groupId: string) {
-    const group = BULB_GROUPS.find((g) => g.id === groupId);
+    const group = groupId === ALL_LIGHTS_GROUP.id
+      ? ALL_LIGHTS_GROUP
+      : BULB_GROUPS.find((g) => g.id === groupId);
     if (!group) return;
     const members = bulbsForGroup(group, bulbs);
     const avg = members.length
@@ -760,13 +903,7 @@ export default function AppScreen() {
         {/* ── Presets / Mode / Fan — dimmed when AC is off ─────────────── */}
         <View style={[styles.acControls, !ac.power ? styles.acControlsOff : null]}>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.presetRail}
-          style={styles.presetScroll}
-          pointerEvents={!ac.power ? 'none' : 'auto'}
-        >
+        <View style={styles.presetRail} pointerEvents={!ac.power ? 'none' : 'auto'}>
           {PRESETS.map((preset) => (
             <Pressable
               key={preset.id}
@@ -787,19 +924,11 @@ export default function AppScreen() {
               </View>
             </Pressable>
           ))}
-        </ScrollView>
+        </View>
 
-        {/* ── Mode ──────────────────────────────────────────────────────── */}
+        {/* ── Mode ───────────────────────────────────────────────────────── */}
         <View style={styles.pillCard} pointerEvents={!ac.power ? 'none' : 'auto'}>
-          <View style={styles.pillCardHeader}>
-            <Text style={styles.pillSectionLabel}>Mode</Text>
-            <Text style={styles.pillCardValue}>{modeLabel(ac.mode)}</Text>
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.pillRail}
-          >
+          <View style={[styles.pillRail, styles.pillRow, styles.pillRowLast]}>
             {MODE_OPTIONS.map((opt) => {
               const active = ac.mode === opt.value;
               return (
@@ -820,20 +949,12 @@ export default function AppScreen() {
                 </Pressable>
               );
             })}
-          </ScrollView>
+          </View>
         </View>
 
         {/* ── Fan speed ─────────────────────────────────────────────────── */}
         <View style={styles.pillCard} pointerEvents={!ac.power ? 'none' : 'auto'}>
-          <View style={styles.pillCardHeader}>
-            <Text style={styles.pillSectionLabel}>Fan</Text>
-            <Text style={styles.pillCardValue}>{windLabel(ac.wind)}</Text>
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.pillRail}
-          >
+          <View style={[styles.pillRail, styles.pillRow, styles.pillRowLast]}>
             {FAN_OPTIONS.map((opt) => {
               const active = ac.wind === opt.value;
               return (
@@ -854,7 +975,7 @@ export default function AppScreen() {
                 </Pressable>
               );
             })}
-          </ScrollView>
+          </View>
         </View>
 
         </View>{/* end acControls */}
@@ -866,49 +987,169 @@ export default function AppScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.allLightsBtn,
+                styles.lightSplitBtn,
                 pressed ? styles.pressed : null,
-                !wizReady || bulbs.some((b) => b.busy) ? styles.disabled : null,
               ]}
-              disabled={!wizReady || bulbs.some((b) => b.busy)}
-              onPress={() => void Promise.all(BULB_GROUPS.map((g) => toggleGroupPower(g)))}
+              accessibilityLabel={lightsSeparated ? 'Combine lights' : 'Separate lights'}
+              onPress={() => setLightsSeparated((current) => !current)}
             >
-              <Text
-                style={[
-                  styles.allLightsBtnText,
-                  bulbs.some((b) => b.isOn) ? styles.allLightsBtnTextOn : null,
-                ]}
-              >
-                {bulbs.some((b) => b.isOn) ? 'All Off' : 'All On'}
-              </Text>
+              <View style={styles.lightSplitIcon}>
+                <View
+                  style={[
+                    styles.lightSplitIconLine,
+                    styles.lightSplitIconStem,
+                    lightsSeparated ? styles.lightSplitIconLineActive : null,
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.lightSplitIconLine,
+                    styles.lightSplitIconLeft,
+                    lightsSeparated ? styles.lightSplitIconLineActive : null,
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.lightSplitIconLine,
+                    styles.lightSplitIconRight,
+                    lightsSeparated ? styles.lightSplitIconLineActive : null,
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.lightSplitIconDot,
+                    styles.lightSplitIconDotRoot,
+                    lightsSeparated ? styles.lightSplitIconDotActive : null,
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.lightSplitIconDot,
+                    styles.lightSplitIconDotLeft,
+                    lightsSeparated ? styles.lightSplitIconDotActive : null,
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.lightSplitIconDot,
+                    styles.lightSplitIconDotRight,
+                    lightsSeparated ? styles.lightSplitIconDotActive : null,
+                  ]}
+                />
+              </View>
             </Pressable>
           </View>
 
-          <View style={styles.lightGrid}>
-            {BULB_GROUPS.map((group) => {
-              const members = bulbsForGroup(group, bulbs);
-              const anyOn = members.some((b) => b.isOn);
-              const groupBusy = members.some((b) => b.busy);
-              const activeColorId = selectedGroupColor[group.id] ?? 'warm-white';
+          {lightsSeparated ? (
+            <View style={styles.lightGrid}>
+              {BULB_GROUPS.map((group) => {
+                const members = bulbsForGroup(group, bulbs);
+                const anyOn = members.some((b) => b.isOn);
+                const groupBusy = members.some((b) => b.busy);
+                const groupUnavailable =
+                  members.length > 0 && members.every((b) => b.available === false);
+                const activeColorId = selectedGroupColor[group.id] ?? 'warm-white';
+                const activePreset = GROUP_COLOR_PRESETS.find((p) => p.id === activeColorId);
+                const availableMembers = members.filter((b) => b.available !== false);
+                const avgBrightness = availableMembers.length
+                  ? Math.round(
+                      availableMembers.reduce((s, b) => s + b.brightness, 0) /
+                        availableMembers.length,
+                    )
+                  : DEFAULT_BULB_BRIGHTNESS;
+
+                return (
+                  <Pressable
+                    key={group.id}
+                    style={({ pressed }) => [
+                      styles.lightTile,
+                      anyOn ? styles.lightTileOn : styles.lightTileOff,
+                      pressed ? styles.lightTilePressed : null,
+                      groupBusy || groupUnavailable || !wizReady ? styles.disabled : null,
+                    ]}
+                    onPress={() => void toggleGroupPower(group)}
+                    onLongPress={() => openColorSheet(group.id)}
+                    delayLongPress={380}
+                    disabled={groupBusy || groupUnavailable || !wizReady}
+                  >
+                    {groupBusy ? (
+                      <ActivityIndicator
+                        size="small"
+                        color={anyOn ? '#ff9f0a' : '#48484a'}
+                        style={styles.lightTileSpinner}
+                      />
+                    ) : (
+                      <>
+                        <View style={styles.lightTileTop}>
+                          <View
+                            style={[
+                              styles.lightTileDot,
+                              anyOn
+                                ? {
+                                    backgroundColor: activePreset?.hex ?? '#ffcc70',
+                                    shadowColor: activePreset?.hex ?? '#ffcc70',
+                                    shadowOpacity: 0.85,
+                                    shadowRadius: 14,
+                                    shadowOffset: { width: 0, height: 0 },
+                                  }
+                                : styles.lightTileDotOff,
+                            ]}
+                          />
+                        </View>
+                        <Text
+                          style={[styles.lightTileName, anyOn ? styles.lightTileNameOn : null]}
+                        >
+                          {group.name}
+                        </Text>
+                        <Text style={styles.lightTileStatus}>
+                          {groupUnavailable ? `${group.name} unavailable` : anyOn ? `${avgBrightness}%` : 'Off'}
+                        </Text>
+                      </>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : (
+            (() => {
+              const anyOn = bulbs.some((b) => b.isOn);
+              const lightsBusy = bulbs.some((b) => b.busy);
+              const unavailableGroups = BULB_GROUPS.filter((group) => {
+                const members = bulbsForGroup(group, bulbs);
+                return members.length > 0 && members.every((b) => b.available === false);
+              });
+              const allUnavailable =
+                bulbs.length > 0 && bulbs.every((b) => b.available === false);
+              const activeGroup =
+                BULB_GROUPS.find((group) => bulbsForGroup(group, bulbs).some((b) => b.isOn)) ??
+                BULB_GROUPS[0];
+              const activeColorId = selectedGroupColor[activeGroup.id] ?? 'warm-white';
               const activePreset = GROUP_COLOR_PRESETS.find((p) => p.id === activeColorId);
-              const avgBrightness = members.length
-                ? Math.round(members.reduce((s, b) => s + b.brightness, 0) / members.length)
+              const availableBulbs = bulbs.filter((b) => b.available !== false);
+              const avgBrightness = availableBulbs.length
+                ? Math.round(
+                    availableBulbs.reduce((s, b) => s + b.brightness, 0) / availableBulbs.length,
+                  )
                 : DEFAULT_BULB_BRIGHTNESS;
+              const unavailableText = unavailableGroups
+                .map((group) => `${group.name} unavailable`)
+                .join(' · ');
 
               return (
                 <Pressable
-                  key={group.id}
                   style={({ pressed }) => [
                     styles.lightTile,
+                    styles.lightTileCombined,
                     anyOn ? styles.lightTileOn : styles.lightTileOff,
                     pressed ? styles.lightTilePressed : null,
-                    groupBusy || !wizReady ? styles.disabled : null,
+                    lightsBusy || allUnavailable || !wizReady ? styles.disabled : null,
                   ]}
-                  onPress={() => void toggleGroupPower(group)}
-                  onLongPress={() => openColorSheet(group.id)}
+                  onPress={() => void toggleAllLightsPower()}
+                  onLongPress={() => openColorSheet(ALL_LIGHTS_GROUP.id)}
                   delayLongPress={380}
-                  disabled={groupBusy || !wizReady}
+                  disabled={lightsBusy || allUnavailable || !wizReady}
                 >
-                  {groupBusy ? (
+                  {lightsBusy ? (
                     <ActivityIndicator
                       size="small"
                       color={anyOn ? '#ff9f0a' : '#48484a'}
@@ -933,24 +1174,35 @@ export default function AppScreen() {
                         />
                       </View>
                       <Text style={[styles.lightTileName, anyOn ? styles.lightTileNameOn : null]}>
-                        {group.name}
+                        Lights
                       </Text>
                       <Text style={styles.lightTileStatus}>
-                        {anyOn ? `${avgBrightness}%` : 'Off'}
+                        {unavailableText || (anyOn ? `${avgBrightness}%` : 'Off')}
                       </Text>
                     </>
                   )}
                 </Pressable>
               );
-            })}
-          </View>
+            })()
+          )}
         </View>
 
       </ScrollView>
 
+      {!inRoom && !roomBusy ? (
+        <Pressable
+          style={styles.enterRoomTapLayer}
+          accessibilityLabel="Enter room"
+          onPress={() => void enterRoom()}
+        />
+      ) : null}
+
       {/* ── Colour sheet ──────────────────────────────────────────────── */}
       {(() => {
-        const sheetGroup = BULB_GROUPS.find((g) => g.id === colorSheetGroupId) ?? null;
+        const sheetGroup =
+          colorSheetGroupId === ALL_LIGHTS_GROUP.id
+            ? ALL_LIGHTS_GROUP
+            : BULB_GROUPS.find((g) => g.id === colorSheetGroupId) ?? null;
         if (!sheetGroup) return null;
 
         const sheetMembers = bulbsForGroup(sheetGroup, bulbs);
@@ -958,11 +1210,9 @@ export default function AppScreen() {
         const sheetActiveColorId = selectedGroupColor[sheetGroup.id] ?? 'warm-white';
 
         const VIVID_COLORS = GROUP_COLOR_PRESETS.filter((p) => p.ring === 'outer');
+        const COLOR_PALETTES = [VIVID_COLORS.slice(0, 4), VIVID_COLORS.slice(4, 8)];
         const WHITE_COLORS = GROUP_COLOR_PRESETS.filter(
           (p) => p.ring === 'inner' && p.id.includes('white'),
-        );
-        const SOFT_COLORS = GROUP_COLOR_PRESETS.filter(
-          (p) => p.ring === 'inner' && !p.id.includes('white'),
         );
 
         async function applyPreset(preset: GroupColorPreset) {
@@ -1022,87 +1272,15 @@ export default function AppScreen() {
                   <Text style={styles.sheetSectionLabel}>Brightness</Text>
                   <Text style={styles.sheetBrightnessValue}>{sheetBrightness}%</Text>
                 </View>
-                <View style={styles.brightnessControls}>
-                  <Pressable
-                    onPress={() => void applyBrightness(sheetBrightness - 10)}
-                    style={({ pressed }) => [
-                      styles.brightnessAction,
-                      pressed ? styles.pressed : null,
-                      sheetGroupBusy || sheetBrightness <= 10 ? styles.disabled : null,
-                    ]}
-                    disabled={sheetGroupBusy || sheetBrightness <= 10}
-                  >
-                    <Text style={styles.brightnessActionText}>−</Text>
-                  </Pressable>
-
-                  <View style={styles.brightnessValuePill}>
-                    <Text style={styles.brightnessValuePillText}>{sheetBrightness}%</Text>
-                  </View>
-
-                  <Pressable
-                    onPress={() => void applyBrightness(sheetBrightness + 10)}
-                    style={({ pressed }) => [
-                      styles.brightnessAction,
-                      pressed ? styles.pressed : null,
-                      sheetGroupBusy || sheetBrightness >= 100 ? styles.disabled : null,
-                    ]}
-                    disabled={sheetGroupBusy || sheetBrightness >= 100}
-                  >
-                    <Text style={styles.brightnessActionText}>+</Text>
-                  </Pressable>
-                </View>
-
-                <View style={styles.brightnessPresetRow}>
-                  {BRIGHTNESS_PRESETS.map((value) => {
-                    const active = sheetBrightness === value;
-                    return (
-                      <Pressable
-                        key={value}
-                        onPress={() => void applyBrightness(value)}
-                        style={({ pressed }) => [
-                          styles.brightnessPresetChip,
-                          active ? styles.brightnessPresetChipActive : null,
-                          pressed ? styles.pressed : null,
-                          sheetGroupBusy ? styles.disabled : null,
-                        ]}
-                        disabled={sheetGroupBusy}
-                      >
-                        <Text
-                          style={[
-                            styles.brightnessPresetChipLabel,
-                            active ? styles.brightnessPresetChipLabelActive : null,
-                          ]}
-                        >
-                          {value}%
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+                <BrightnessSlider
+                  value={sheetBrightness}
+                  disabled={sheetGroupBusy}
+                  onPreview={setSheetBrightness}
+                  onCommit={(value) => void applyBrightness(value)}
+                />
               </View>
 
               <View style={styles.sheetSection}>
-                <Text style={styles.sheetSectionLabel}>Colour</Text>
-                <View style={styles.colorSwatchGrid}>
-                  {VIVID_COLORS.map((preset) => (
-                    <Pressable
-                      key={preset.id}
-                      onPress={() => void applyPreset(preset)}
-                      style={({ pressed }) => [
-                        styles.colorSwatch,
-                        { backgroundColor: preset.hex },
-                        sheetActiveColorId === preset.id ? styles.colorSwatchActive : null,
-                        pressed ? styles.pressed : null,
-                        sheetGroupBusy ? styles.disabled : null,
-                      ]}
-                      disabled={sheetGroupBusy}
-                    />
-                  ))}
-                </View>
-              </View>
-
-              <View style={styles.sheetSection}>
-                <Text style={styles.sheetSectionLabel}>White</Text>
                 <View style={styles.colorChipRow}>
                   {WHITE_COLORS.map((preset) => (
                     <Pressable
@@ -1130,31 +1308,36 @@ export default function AppScreen() {
                 </View>
               </View>
 
-              <View style={[styles.sheetSection, styles.sheetSectionLast]}>
-                <Text style={styles.sheetSectionLabel}>Soft</Text>
-                <View style={styles.colorChipRow}>
-                  {SOFT_COLORS.map((preset) => (
-                    <Pressable
-                      key={preset.id}
-                      onPress={() => void applyPreset(preset)}
-                      style={({ pressed }) => [
-                        styles.colorChip,
-                        sheetActiveColorId === preset.id ? styles.colorChipActive : null,
-                        pressed ? styles.pressed : null,
-                        sheetGroupBusy ? styles.disabled : null,
-                      ]}
-                      disabled={sheetGroupBusy}
-                    >
-                      <View style={[styles.colorChipDot, { backgroundColor: preset.hex }]} />
-                      <Text
-                        style={[
-                          styles.colorChipLabel,
-                          sheetActiveColorId === preset.id ? styles.colorChipLabelActive : null,
-                        ]}
-                      >
-                        {preset.name}
-                      </Text>
-                    </Pressable>
+              <View style={styles.sheetSection}>
+                <View style={styles.colorPaletteStack}>
+                  {COLOR_PALETTES.map((palette, index) => (
+                    <View key={index} style={styles.colorPaletteRow}>
+                      {palette.map((preset) => (
+                        <Pressable
+                          key={preset.id}
+                          onPress={() => void applyPreset(preset)}
+                          style={({ pressed }) => [
+                            styles.colorPaletteTile,
+                            { backgroundColor: preset.hex },
+                            sheetActiveColorId === preset.id
+                              ? styles.colorPaletteTileActive
+                              : null,
+                            pressed ? styles.pressed : null,
+                            sheetGroupBusy ? styles.disabled : null,
+                          ]}
+                          disabled={sheetGroupBusy}
+                        >
+                          <View
+                            style={[
+                              styles.colorPaletteTileInner,
+                              sheetActiveColorId === preset.id
+                                ? styles.colorPaletteTileInnerActive
+                                : null,
+                            ]}
+                          />
+                        </Pressable>
+                      ))}
+                    </View>
                   ))}
                 </View>
               </View>
@@ -1243,6 +1426,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingTop: 12,
     paddingBottom: 0,
+  },
+  enterRoomTapLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 8,
   },
 
   // ── Header ────────────────────────────────────────────────────────────────
@@ -1384,27 +1571,23 @@ const styles = StyleSheet.create({
   },
 
   // ── Presets ───────────────────────────────────────────────────────────────
-  presetScroll: {
-    marginHorizontal: -10,
+  presetRail: {
+    flexDirection: 'row',
+    gap: 10,
     marginBottom: 18,
   },
-  presetRail: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-    gap: 10,
-  },
   presetPill: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 12,
     backgroundColor: '#111111',
     borderRadius: 16,
     paddingVertical: 13,
-    paddingHorizontal: 16,
+    paddingHorizontal: 10,
     borderWidth: 1,
     borderColor: '#ffffff08',
-    minWidth: 110,
   },
   presetDot: {
     width: 9,
@@ -1430,8 +1613,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#ffffff08',
-    paddingTop: 16,
-    paddingBottom: 18,
+    paddingVertical: 14,
     marginBottom: 12,
   },
   pillCardHeader: {
@@ -1454,15 +1636,25 @@ const styles = StyleSheet.create({
   },
   pillRail: {
     gap: 8,
-    paddingHorizontal: 18,
+    paddingHorizontal: 14,
+  },
+  pillRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  pillRowLast: {
+    marginBottom: 0,
   },
   pill: {
+    flex: 1,
     backgroundColor: '#1c1c1e',
-    borderRadius: 20,
+    borderRadius: 16,
     paddingVertical: 10,
-    paddingHorizontal: 20,
+    paddingHorizontal: 0,
     borderWidth: 1,
     borderColor: '#ffffff08',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pillActive: {
     backgroundColor: '#ffffff',
@@ -1504,6 +1696,66 @@ const styles = StyleSheet.create({
   allLightsBtnTextOn: {
     color: '#ff9f0a',
   },
+  lightSplitBtn: {
+    width: 38,
+    height: 32,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lightSplitIcon: {
+    width: 20,
+    height: 20,
+  },
+  lightSplitIconLine: {
+    position: 'absolute',
+    width: 2,
+    borderRadius: 999,
+    backgroundColor: '#48484a',
+  },
+  lightSplitIconLineActive: {
+    backgroundColor: '#ff9f0a',
+  },
+  lightSplitIconStem: {
+    left: 9,
+    top: 10,
+    height: 8,
+  },
+  lightSplitIconLeft: {
+    left: 6,
+    top: 3,
+    height: 12,
+    transform: [{ rotate: '36deg' }],
+  },
+  lightSplitIconRight: {
+    right: 6,
+    top: 3,
+    height: 12,
+    transform: [{ rotate: '-36deg' }],
+  },
+  lightSplitIconDot: {
+    position: 'absolute',
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#48484a',
+  },
+  lightSplitIconDotActive: {
+    backgroundColor: '#ff9f0a',
+  },
+  lightSplitIconDotRoot: {
+    left: 7.5,
+    bottom: 0,
+  },
+  lightSplitIconDotLeft: {
+    left: 1,
+    top: 1,
+  },
+  lightSplitIconDotRight: {
+    right: 1,
+    top: 1,
+  },
   lightGrid: {
     flexDirection: 'row',
     gap: 12,
@@ -1514,6 +1766,11 @@ const styles = StyleSheet.create({
     padding: 18,
     paddingBottom: 22,
     minHeight: 148,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lightTileCombined: {
+    width: '100%',
   },
   lightTileOff: {
     backgroundColor: '#0d0d0d',
@@ -1533,8 +1790,8 @@ const styles = StyleSheet.create({
     marginTop: 32,
   },
   lightTileTop: {
-    flex: 1,
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 14,
   },
   lightTileDot: {
@@ -1551,6 +1808,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: -0.1,
     marginBottom: 3,
+    textAlign: 'center',
   },
   lightTileNameOn: {
     color: '#ffffff',
@@ -1559,6 +1817,7 @@ const styles = StyleSheet.create({
     color: '#3a3a3c',
     fontSize: 13,
     fontWeight: '400',
+    textAlign: 'center',
   },
 
   // ── Colour sheet ──────────────────────────────────────────────────────────
@@ -1633,6 +1892,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
+  brightnessSlider: {
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#111214',
+    borderWidth: 1,
+    borderColor: '#1f2023',
+    justifyContent: 'center',
+  },
+  brightnessSliderFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 17,
+    backgroundColor: '#ffffff',
+  },
   brightnessControls: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1670,49 +1945,36 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.1,
   },
-  brightnessPresetRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 12,
+  colorPaletteStack: {
+    gap: 8,
   },
-  brightnessPresetChip: {
-    minWidth: 64,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+  colorPaletteRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  colorPaletteTile: {
+    flex: 1,
+    height: 52,
     borderRadius: 14,
-    backgroundColor: '#111214',
-    borderWidth: 1,
-    borderColor: '#1f2023',
-    alignItems: 'center',
-  },
-  brightnessPresetChipActive: {
-    backgroundColor: '#0a84ff',
-    borderColor: '#0a84ff',
-  },
-  brightnessPresetChipLabel: {
-    color: '#c7c7cc',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  brightnessPresetChipLabelActive: {
-    color: '#ffffff',
-  },
-  colorSwatchGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  colorSwatch: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: '#ffffff12',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  colorSwatchActive: {
+  colorPaletteTileActive: {
     borderColor: '#ffffff',
-    transform: [{ scale: 1.1 }],
+    transform: [{ scale: 1.02 }],
+  },
+  colorPaletteTileInner: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: 'transparent',
+  },
+  colorPaletteTileInnerActive: {
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#000000',
   },
   colorChipRow: {
     flexDirection: 'row',
