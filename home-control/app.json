@@ -14,12 +14,17 @@
         "NSLocalNetworkUsageDescription": "Room uses your local network to control WiZ lights.",
         "RCTNewArchEnabled": false
       },
-      "bundleIdentifier": "org.name.homecontrol"
+      "bundleIdentifier": "org.name.homecontrol",
+      "runtimeVersion": "1.0.0"
     },
     "extra": {
       "eas": {
         "projectId": "9a0cab69-d38f-47de-a853-1afc31f64495"
       }
-    }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/9a0cab69-d38f-47de-a853-1afc31f64495"
+    },
+    "android": {}
   }
 }

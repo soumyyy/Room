@@ -14,4 +14,20 @@ actor RoomController {
     async let lightsTask: Void = WiZClient.shared.apply(RoomConfig.leaveLights, to: RoomConfig.bulbs)
     _ = try await (acTask, lightsTask)
   }
+
+  func acOn() async throws {
+    try await TuyaClient.shared.sendACScene(RoomConfig.acOnScene)
+  }
+
+  func acOff() async throws {
+    try await TuyaClient.shared.sendACScene(RoomConfig.acOffScene)
+  }
+
+  func lightsOn() async throws {
+    try await WiZClient.shared.apply(RoomConfig.lightsOn, to: RoomConfig.bulbs)
+  }
+
+  func lightsOff() async throws {
+    try await WiZClient.shared.apply(RoomConfig.lightsOff, to: RoomConfig.bulbs)
+  }
 }

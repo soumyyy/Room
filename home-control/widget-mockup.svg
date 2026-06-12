@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="360" viewBox="0 0 960 360">
+  <rect width="960" height="360" fill="#f3f4f6"/>
+  <style>
+    .label{font:600 16px -apple-system,BlinkMacSystemFont,"SF Pro Text",Arial,sans-serif;fill:#111827}
+    .sub{font:500 13px -apple-system,BlinkMacSystemFont,"SF Pro Text",Arial,sans-serif;fill:#6b7280}
+    .btnText{font:700 14px -apple-system,BlinkMacSystemFont,"SF Pro Text",Arial,sans-serif;fill:#fff}
+    .smallText{font-size:12px}
+    .icon{stroke:#fff;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;fill:none;opacity:.94}
+  </style>
+
+  <text x="70" y="45" class="label">Small widget</text>
+  <text x="70" y="67" class="sub">2 x 3 controls</text>
+  <g transform="translate(70 88)">
+    <rect width="210" height="210" rx="34" fill="#050505"/>
+    <g transform="translate(14 14)">
+      <g>
+        <rect width="86" height="54" rx="15" fill="#383838"/>
+        <path class="icon" d="M34 17h18v24H34zM52 28h7M39 22v14"/>
+        <text x="43" y="45" class="btnText smallText" text-anchor="middle">Enter</text>
+      </g>
+      <g transform="translate(96 0)">
+        <rect width="86" height="54" rx="15" fill="#383838"/>
+        <path class="icon" d="M35 17h17v24H35zM52 29h8M34 26l-7 5 7 5"/>
+        <text x="43" y="45" class="btnText smallText" text-anchor="middle">Leave</text>
+      </g>
+      <g transform="translate(0 64)">
+        <rect width="86" height="54" rx="15" fill="#383838"/>
+        <path class="icon" d="M43 15v16M35 19l16 9M51 19l-16 9M34 35h18M37 42l12-12M49 42 37 30"/>
+        <text x="43" y="45" class="btnText smallText" text-anchor="middle">AC On</text>
+      </g>
+      <g transform="translate(96 64)">
+        <rect width="86" height="54" rx="15" fill="#383838"/>
+        <path class="icon" d="M43 16v13M34 24a13 13 0 1 0 18 0"/>
+        <text x="43" y="45" class="btnText smallText" text-anchor="middle">AC Off</text>
+      </g>
+      <g transform="translate(0 128)">
+        <rect width="86" height="54" rx="15" fill="#383838"/>
+        <path class="icon" d="M35 27a8 8 0 1 1 16 0c0 4-4 6-4 10h-8c0-4-4-6-4-10zM39 42h8"/>
+        <text x="43" y="45" class="btnText smallText" text-anchor="middle">Light On</text>
+      </g>
+      <g transform="translate(96 128)">
+        <rect width="86" height="54" rx="15" fill="#383838"/>
+        <path class="icon" d="M35 27a8 8 0 1 1 16 0c0 4-4 6-4 10h-8c0-4-4-6-4-10zM39 42h8"/>
+        <text x="43" y="45" class="btnText smallText" text-anchor="middle">Light Off</text>
+      </g>
+    </g>
+  </g>
+
+  <text x="360" y="45" class="label">Medium widget</text>
+  <text x="360" y="67" class="sub">3 x 2 controls</text>
+  <g transform="translate(360 88)">
+    <rect width="500" height="210" rx="34" fill="#050505"/>
+    <g transform="translate(16 22)">
+      <g>
+        <rect width="148" height="75" rx="18" fill="#383838"/>
+        <path class="icon" d="M66 17h18v27H66zM84 31h8M71 23v16"/>
+        <text x="74" y="58" class="btnText" text-anchor="middle">Enter</text>
+      </g>
+      <g transform="translate(160 0)">
+        <rect width="148" height="75" rx="18" fill="#383838"/>
+        <path class="icon" d="M66 17h18v27H66zM84 31h8M65 30l-8 6 8 6"/>
+        <text x="74" y="58" class="btnText" text-anchor="middle">Leave</text>
+      </g>
+      <g transform="translate(320 0)">
+        <rect width="148" height="75" rx="18" fill="#383838"/>
+        <path class="icon" d="M74 15v22M62 22l24 14M86 22 62 36M61 45h26M65 55l18-18M83 55 65 37"/>
+        <text x="74" y="58" class="btnText" text-anchor="middle">AC On</text>
+      </g>
+      <g transform="translate(0 87)">
+        <rect width="148" height="75" rx="18" fill="#383838"/>
+        <path class="icon" d="M74 18v17M62 27a17 17 0 1 0 24 0"/>
+        <text x="74" y="58" class="btnText" text-anchor="middle">AC Off</text>
+      </g>
+      <g transform="translate(160 87)">
+        <rect width="148" height="75" rx="18" fill="#383838"/>
+        <path class="icon" d="M64 34a10 10 0 1 1 20 0c0 5-5 8-5 13h-10c0-5-5-8-5-13zM69 54h10"/>
+        <text x="74" y="58" class="btnText" text-anchor="middle">Light On</text>
+      </g>
+      <g transform="translate(320 87)">
+        <rect width="148" height="75" rx="18" fill="#383838"/>
+        <path class="icon" d="M64 34a10 10 0 1 1 20 0c0 5-5 8-5 13h-10c0-5-5-8-5-13zM69 54h10"/>
+        <text x="74" y="58" class="btnText" text-anchor="middle">Light Off</text>
+      </g>
+    </g>
+  </g>
+</svg>

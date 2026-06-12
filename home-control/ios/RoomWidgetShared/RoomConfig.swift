@@ -52,7 +52,11 @@ enum RoomConfig {
 
   static let enterScene = AcScene(power: 1, mode: 0, temp: 24, wind: 1)
   static let leaveScene = AcScene(power: 0, mode: 0, temp: 24, wind: 1)
+  static let acOnScene = AcScene(power: 1, mode: 0, temp: 24, wind: 1)
+  static let acOffScene = AcScene(power: 0, mode: 0, temp: 24, wind: 1)
 
   static let enterLights = WizPilot(state: true, dimming: 100, temp: 4200, r: nil, g: nil, b: nil)
   static let leaveLights = WizPilot(state: false, dimming: nil, temp: nil, r: nil, g: nil, b: nil)
+  static let lightsOn = WizPilot(state: true, dimming: 100, temp: 4200, r: nil, g: nil, b: nil)
+  static let lightsOff = WizPilot(state: false, dimming: nil, temp: nil, r: nil, g: nil, b: nil)
 }

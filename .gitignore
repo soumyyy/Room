@@ -1,0 +1,19 @@
+# Local tool state
+.claude/
+.claude*
+.expo/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Build artifacts
+**/build/
+**/dist/
+
+# Xcode user state
+**/xcuserdata/
+**/*.xcuserstate
+
+# Standalone prototype not used by the Expo app submission
+room-widget-ios/
