@@ -114,6 +114,31 @@ PBXGroup is virtual — its children carry the full relative path. A bare `path`
       unobserved tile offers On, which is the useful guess when we cannot know.
 - [x] 37 assertions pass (28 snapshot/config + 9 tile readings). Both simulator and device SDKs build.
 
+## Done — smaller audit findings + widget refresh
+
+- [x] Finding 6: colour is now stored per real group id. Choosing on the combined tile wrote under `'all'`,
+      which nothing read back, so the dot never changed — and the per-group sheets went stale too. With
+      `'all'` open, a chip highlights only when every group agrees.
+- [x] Finding 8: `toggleGroupPower` no longer pays for a status round trip before every tap. It uses what
+      we already know and only reads when nothing has been observed yet; every command merges fresh
+      statuses back in, so local state stays current.
+- [x] 14 unused style keys removed (`AppScreen.tsx` 2045 → 1995 lines).
+- [x] `UIUserInterfaceStyle` Light → Dark; the whole UI is black and system surfaces were rendering light.
+- [x] `ITSAppUsesNonExemptEncryption: false` so App Store submission stops asking.
+- [x] Toast no longer names `app/config.ts` at the user.
+- [x] **Widget refresh.** `getTimeline` only re-rendered the stored snapshot, so the physical AC remote or
+      the WiZ app left the tile wrong forever. `WiZClient.readGroupStates` adds a `getPilot` receive path
+      and `RoomController.refresh()` folds both sources in. Each leg is independently optional — Tuya works
+      on cellular, bulbs only on Wi-Fi — and anything that does not answer keeps its previous value, so a
+      refresh can improve the snapshot but never degrade it. Tuya requests bounded to 6s (URLSession
+      defaults to 60, longer than a widget refresh lives).
+- [x] 43 assertions pass (28 snapshot/config + 9 readings + 6 aggregation).
+
+## Not done — each needs a pod install, so kept out of this pass
+
+- [ ] Finding 9: hardcoded `paddingTop: 54` — needs `react-native-safe-area-context`, which is not installed
+- [ ] Remove `react-native-tcp-socket` — confirmed unused (react-native-udp bundles its own buffer/events)
+
 ## Remaining — direction C (chosen)
 
 - [ ] `TuyaClient.fetchACStatus()` + a `getPilot` receive path in `WiZClient`
