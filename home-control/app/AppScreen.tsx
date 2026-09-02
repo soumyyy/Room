@@ -1,4 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -10,7 +11,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StatusBar as RNStatusBar,
   StyleSheet,
   Text,
   View,
@@ -429,6 +429,7 @@ export default function AppScreen() {
   const acTempAnim = useRef(new Animated.Value(INITIAL_SCENE.power ? 1 : 0)).current;
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const insets = useSafeAreaInsets();
   const tuyaReady = isTuyaConfigured();
   const wizDirectAvailable = isUsingDirectWiz();
   const wizReady = wizDirectAvailable || DEV_LIGHT_UI_PREVIEW;
@@ -826,7 +827,7 @@ export default function AppScreen() {
 
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { paddingTop: insets.top + 8 }]}>
       <StatusBar style="light" />
 
       {toast ? (
@@ -837,7 +838,10 @@ export default function AppScreen() {
         </View>
       ) : null}
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 8 }]}
+        showsVerticalScrollIndicator={false}
+      >
 
         {/* ── Room toggle ───────────────────────────────────────────────── */}
         <Pressable
@@ -1400,7 +1404,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#000000',
-    paddingTop: Platform.OS === 'ios' ? 54 : (RNStatusBar.currentHeight ?? 0),
   },
 
   // ── Room button ───────────────────────────────────────────────────────────
@@ -1458,7 +1461,6 @@ const styles = StyleSheet.create({
   scroll: {
     paddingHorizontal: 10,
     paddingTop: 12,
-    paddingBottom: 0,
   },
 
   // ── Header ────────────────────────────────────────────────────────────────

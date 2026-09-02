@@ -134,10 +134,14 @@ PBXGroup is virtual — its children carry the full relative path. A bare `path`
       defaults to 60, longer than a widget refresh lives).
 - [x] 43 assertions pass (28 snapshot/config + 9 readings + 6 aggregation).
 
-## Not done — each needs a pod install, so kept out of this pass
+## Done — dependency pass
 
-- [ ] Finding 9: hardcoded `paddingTop: 54` — needs `react-native-safe-area-context`, which is not installed
-- [ ] Remove `react-native-tcp-socket` — confirmed unused (react-native-udp bundles its own buffer/events)
+- [x] Finding 9: `paddingTop: 54` guessed at one device — it overshot an SE's 20pt status bar and tucked
+      content under a 59pt Dynamic Island. Now `insets.top + 8` via `react-native-safe-area-context`, with
+      `SafeAreaProvider` added in `App.js` and `insets.bottom` on the scroll content so the last tile clears
+      the home indicator.
+- [x] Removed `react-native-tcp-socket` — confirmed unused (react-native-udp bundles its own buffer/events).
+      Podfile.lock down one pod; verified the bundle has zero references to it.
 
 ## Remaining — direction C (chosen)
 
