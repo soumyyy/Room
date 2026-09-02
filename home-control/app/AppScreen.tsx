@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  AppState,
   GestureResponderEvent,
   LayoutChangeEvent,
   Modal,
@@ -22,6 +23,7 @@ import {
   type BulbConfig,
   type BulbGroupConfig,
 } from './config';
+import { recordAcScene, recordLightCommand } from './roomSnapshot';
 import { getAcStatus, sendAcScene, type AcScenePayload, type AcStatus } from './tuya';
 import {
   getWizStatuses,
@@ -58,8 +60,7 @@ type GroupColorPreset = {
   id: string;
   hex: string;
   name: string;
-  ring: 'outer' | 'inner';
-  angle: number;
+  kind: 'white' | 'color';
   params: Record<string, unknown>;
 };
 
@@ -115,126 +116,118 @@ const PRESETS: Preset[] = [
   },
 ];
 
-const COLOR_BOARD_SIZE = 232;
-const POWER_CORE_SIZE = 104;
-const COLOR_SWATCH_SIZE = 32;
-const OUTER_COLOR_RADIUS = 94;
-const INNER_COLOR_RADIUS = 58;
 
 const GROUP_COLOR_PRESETS: GroupColorPreset[] = [
+  {
+    id: 'warm-white',
+    name: 'Warm White',
+    hex: '#ffa757',
+    kind: 'white',
+    params: { state: true, temp: 2700 },
+  },
+  {
+    id: 'neutral-white',
+    name: 'Neutral',
+    hex: '#ffd3af',
+    kind: 'white',
+    params: { state: true, temp: 4200 },
+  },
+  {
+    id: 'cool-white',
+    name: 'Cool White',
+    hex: '#fffefa',
+    kind: 'white',
+    params: { state: true, temp: 6500 },
+  },
   {
     id: 'red',
     name: 'Red',
     hex: '#ff3b30',
-    ring: 'outer',
-    angle: -90,
+    kind: 'color',
     params: { state: true, r: 255, g: 59, b: 48 },
   },
   {
     id: 'orange',
     name: 'Orange',
     hex: '#ff9500',
-    ring: 'outer',
-    angle: -60,
+    kind: 'color',
     params: { state: true, r: 255, g: 149, b: 0 },
   },
   {
     id: 'yellow',
     name: 'Yellow',
     hex: '#ffd60a',
-    ring: 'outer',
-    angle: -30,
+    kind: 'color',
     params: { state: true, r: 255, g: 214, b: 10 },
   },
   {
     id: 'green',
     name: 'Green',
     hex: '#30d158',
-    ring: 'outer',
-    angle: 0,
+    kind: 'color',
     params: { state: true, r: 48, g: 209, b: 88 },
   },
   {
     id: 'cyan',
     name: 'Cyan',
     hex: '#00c7be',
-    ring: 'outer',
-    angle: 30,
+    kind: 'color',
     params: { state: true, r: 0, g: 199, b: 190 },
   },
   {
     id: 'blue',
     name: 'Blue',
     hex: '#0a84ff',
-    ring: 'outer',
-    angle: 60,
+    kind: 'color',
     params: { state: true, r: 10, g: 132, b: 255 },
   },
   {
     id: 'purple',
     name: 'Purple',
     hex: '#bf5af2',
-    ring: 'outer',
-    angle: 90,
+    kind: 'color',
     params: { state: true, r: 191, g: 90, b: 242 },
   },
   {
     id: 'pink',
     name: 'Pink',
     hex: '#ff2d55',
-    ring: 'outer',
-    angle: 120,
+    kind: 'color',
     params: { state: true, r: 255, g: 45, b: 85 },
   },
-  {
-    id: 'warm-white',
-    name: 'Warm White',
-    hex: '#ffd6a1',
-    ring: 'inner',
-    angle: -90,
-    params: { state: true, temp: 2700 },
-  },
-  {
-    id: 'neutral-white',
-    name: 'Neutral',
-    hex: '#fff0d6',
-    ring: 'inner',
-    angle: -18,
-    params: { state: true, temp: 4200 },
-  },
-  {
-    id: 'cool-white',
-    name: 'Cool White',
-    hex: '#e9f6ff',
-    ring: 'inner',
-    angle: 54,
-    params: { state: true, temp: 6500 },
-  },
+  // Pastels: #a7f0d2 is 167 of neutral white plus (0, 73, 43) of chroma.
+  // Sent as pure RGB the bulb lights only the colour LEDs and reads far more
+  // saturated than the swatch, so the shared component goes to the white LED.
   {
     id: 'seafoam',
     name: 'Seafoam',
     hex: '#a7f0d2',
-    ring: 'inner',
-    angle: 126,
-    params: { state: true, r: 167, g: 240, b: 210 },
+    kind: 'color',
+    params: { state: true, r: 0, g: 73, b: 43, c: 167 },
   },
   {
     id: 'lavender',
     name: 'Lavender',
     hex: '#d2c8ff',
-    ring: 'inner',
-    angle: 198,
-    params: { state: true, r: 210, g: 200, b: 255 },
+    kind: 'color',
+    params: { state: true, r: 10, g: 0, b: 55, c: 200 },
   },
   {
     id: 'blush',
     name: 'Blush',
     hex: '#ffc6d8',
-    ring: 'inner',
-    angle: 270,
-    params: { state: true, r: 255, g: 198, b: 216 },
+    kind: 'color',
+    params: { state: true, r: 57, g: 0, b: 18, w: 198 },
   },
 ];
+
+const COLOR_ROW_SIZE = 4;
+const WHITE_PRESETS = GROUP_COLOR_PRESETS.filter((preset) => preset.kind === 'white');
+const COLOR_PRESETS = GROUP_COLOR_PRESETS.filter((preset) => preset.kind === 'color');
+const COLOR_ROWS = Array.from(
+  { length: Math.ceil(COLOR_PRESETS.length / COLOR_ROW_SIZE) },
+  (_, row) => COLOR_PRESETS.slice(row * COLOR_ROW_SIZE, (row + 1) * COLOR_ROW_SIZE),
+);
 
 function isTuyaConfigured() {
   return (
@@ -408,17 +401,6 @@ function BrightnessSlider({
   );
 }
 
-function getColorNodePosition(preset: GroupColorPreset) {
-  const radius = preset.ring === 'outer' ? OUTER_COLOR_RADIUS : INNER_COLOR_RADIUS;
-  const angle = (preset.angle * Math.PI) / 180;
-  const center = COLOR_BOARD_SIZE / 2;
-
-  return {
-    left: center + Math.cos(angle) * radius - COLOR_SWATCH_SIZE / 2,
-    top: center + Math.sin(angle) * radius - COLOR_SWATCH_SIZE / 2,
-  };
-}
-
 export default function AppScreen() {
   const [ac, setAc] = useState<AcScene>(INITIAL_SCENE);
   const [acBusy, setAcBusy] = useState(false);
@@ -470,7 +452,9 @@ export default function AppScreen() {
 
     try {
       const status = await getAcStatus();
-      setAc(normalizeStatus(status));
+      const scene = normalizeStatus(status);
+      setAc(scene);
+      recordAcScene(scene);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to reach Tuya Cloud';
       showErrorToast(message);
@@ -545,9 +529,12 @@ export default function AppScreen() {
 
       try {
         const status = await getAcStatus();
-        setAc(normalizeStatus(status));
+        const confirmed = normalizeStatus(status);
+        setAc(confirmed);
+        recordAcScene(confirmed);
       } catch {
         setAc(nextScene);
+        recordAcScene(nextScene);
       }
     } catch (error) {
       setAc(previous);
@@ -562,6 +549,7 @@ export default function AppScreen() {
     group: BulbGroupConfig,
     optimisticUpdate: (bulb: BulbState) => BulbState,
     params: Record<string, unknown>,
+    options?: { presetId?: string },
   ) {
     const snapshot = bulbs.filter((bulb) => group.bulbIds.includes(bulb.id));
 
@@ -592,6 +580,7 @@ export default function AppScreen() {
         params,
       );
       setBulbs((current) => mergeBulbStatuses(current, statuses));
+      recordLightCommand(group.id, params, options?.presetId);
       return true;
     } catch (error) {
       setBulbs((current) =>
@@ -788,6 +777,22 @@ export default function AppScreen() {
         clearTimeout(toastTimerRef.current);
       }
     };
+  }, []);
+
+  useEffect(() => {
+    // Siri, the widget and the physical remote can all change the room while
+    // this screen is backgrounded. Without this the app would show whatever it
+    // last rendered and happily send those stale values back.
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') {
+        return;
+      }
+
+      void loadStatus({ showLoader: false });
+      void loadBulbStatus();
+    });
+
+    return () => subscription.remove();
   }, []);
 
 
@@ -1189,14 +1194,6 @@ export default function AppScreen() {
 
       </ScrollView>
 
-      {!inRoom && !roomBusy ? (
-        <Pressable
-          style={styles.enterRoomTapLayer}
-          accessibilityLabel="Enter room"
-          onPress={() => void enterRoom()}
-        />
-      ) : null}
-
       {/* ── Colour sheet ──────────────────────────────────────────────── */}
       {(() => {
         const sheetGroup =
@@ -1209,17 +1206,12 @@ export default function AppScreen() {
         const sheetGroupBusy = sheetMembers.some((b) => b.busy);
         const sheetActiveColorId = selectedGroupColor[sheetGroup.id] ?? 'warm-white';
 
-        const VIVID_COLORS = GROUP_COLOR_PRESETS.filter((p) => p.ring === 'outer');
-        const COLOR_PALETTES = [VIVID_COLORS.slice(0, 4), VIVID_COLORS.slice(4, 8)];
-        const WHITE_COLORS = GROUP_COLOR_PRESETS.filter(
-          (p) => p.ring === 'inner' && p.id.includes('white'),
-        );
-
         async function applyPreset(preset: GroupColorPreset) {
           const ok = await runGroupCommand(
             sheetGroup!,
             (b) => ({ ...b, isOn: true }),
             { dimming: clampBrightness(sheetBrightness), ...preset.params },
+            { presetId: preset.id },
           );
           if (ok) {
             setSelectedGroupColor((c) => ({ ...c, [sheetGroup!.id]: preset.id }));
@@ -1282,7 +1274,7 @@ export default function AppScreen() {
 
               <View style={styles.sheetSection}>
                 <View style={styles.colorChipRow}>
-                  {WHITE_COLORS.map((preset) => (
+                  {WHITE_PRESETS.map((preset) => (
                     <Pressable
                       key={preset.id}
                       onPress={() => void applyPreset(preset)}
@@ -1310,9 +1302,9 @@ export default function AppScreen() {
 
               <View style={styles.sheetSection}>
                 <View style={styles.colorPaletteStack}>
-                  {COLOR_PALETTES.map((palette, index) => (
-                    <View key={index} style={styles.colorPaletteRow}>
-                      {palette.map((preset) => (
+                  {COLOR_ROWS.map((row) => (
+                    <View key={row[0].id} style={styles.colorPaletteRow}>
+                      {row.map((preset) => (
                         <Pressable
                           key={preset.id}
                           onPress={() => void applyPreset(preset)}
@@ -1336,6 +1328,9 @@ export default function AppScreen() {
                             ]}
                           />
                         </Pressable>
+                      ))}
+                      {Array.from({ length: COLOR_ROW_SIZE - row.length }, (_, index) => (
+                        <View key={`pad-${index}`} style={styles.colorPaletteTilePad} />
                       ))}
                     </View>
                   ))}
@@ -1426,10 +1421,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingTop: 12,
     paddingBottom: 0,
-  },
-  enterRoomTapLayer: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 8,
   },
 
   // ── Header ────────────────────────────────────────────────────────────────
@@ -1960,6 +1951,9 @@ const styles = StyleSheet.create({
     borderColor: '#ffffff12',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  colorPaletteTilePad: {
+    flex: 1,
   },
   colorPaletteTileActive: {
     borderColor: '#ffffff',
