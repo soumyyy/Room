@@ -17,3 +17,10 @@
 
 # Standalone prototype not used by the Expo app submission
 room-widget-ios/
+
+# Tuya credentials and everything generated from them (scripts/gen-secrets.mjs)
+home-control/secrets.json
+home-control/app/config.secrets.ts
+home-control/ios/RoomWidgetShared/RoomSecrets.swift
+room-widget-mac/Sources/Shared/RoomSecrets.swift
+room-desktop/src/main/secrets.cjs

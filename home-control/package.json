@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "postinstall": "node ./scripts/gen-secrets.mjs",
+    "secrets": "node ./scripts/gen-secrets.mjs",
     "start": "node ./node_modules/expo/bin/cli start",
     "android": "node ./node_modules/expo/bin/cli run:android",
     "ios": "node ./node_modules/expo/bin/cli run:ios",

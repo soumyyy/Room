@@ -32,3 +32,22 @@ React Native version blows up inside RN internals when run on this app's native 
   means it is not this app's bundle.
 
 **Rule:** before debugging a JS startup crash, confirm which project is serving :8081.
+
+## Tuya credentials live in one place now
+
+`home-control/secrets.json` (untracked) is the only file to edit. `npm run secrets` — or any
+`npm install`, via `postinstall` — regenerates the four consumers:
+
+```
+home-control/app/config.secrets.ts
+home-control/ios/RoomWidgetShared/RoomSecrets.swift
+room-widget-mac/Sources/Shared/RoomSecrets.swift
+room-desktop/src/main/secrets.cjs
+```
+
+All five files are gitignored. On EAS there is no `secrets.json`, so the generator reads
+`ROOM_TUYA_CLIENT_ID`, `ROOM_TUYA_CLIENT_SECRET`, `ROOM_TUYA_API_BASE_URL`, `ROOM_TUYA_INFRARED_ID`
+and `ROOM_TUYA_AC_REMOTE_ID` first — set them with `eas secret:create` before the next cloud build.
+
+With neither source present it warns and writes empty strings rather than failing the build;
+`isTuyaConfigured()` then reports the app as unconfigured, which is the honest outcome.

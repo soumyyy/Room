@@ -1,3 +1,5 @@
+import { TUYA_SECRETS } from './config.secrets';
+
 export interface BulbConfig {
   id: string;
   name: string;
@@ -41,9 +43,9 @@ export const BULB_GROUPS: BulbGroupConfig[] = [
 
 // ── Tuya cloud AC control on-device ────────────────────────────────────────
 export const TUYA_CLOUD: TuyaCloudConfig = {
-  infraredId: 'd7629f91c10f8aaa6dbtaw',
-  acRemoteId: 'd7c7ddecd3c98a5a00nezc',
-  clientId: 'wcumxxy4hrjaurwdd8dg',
-  clientSecret: 'f74fbd3a47a94dd29ce478335ac26362',
-  apiBaseUrl: 'https://openapi.tuyain.com',
+  infraredId: TUYA_SECRETS.infraredId,
+  acRemoteId: TUYA_SECRETS.acRemoteId,
+  clientId: TUYA_SECRETS.clientId,
+  clientSecret: TUYA_SECRETS.clientSecret,
+  apiBaseUrl: TUYA_SECRETS.apiBaseUrl,
 };

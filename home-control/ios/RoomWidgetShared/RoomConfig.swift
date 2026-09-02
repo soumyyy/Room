@@ -113,11 +113,11 @@ enum RoomConfig {
   }
 
   static let tuya = TuyaConfig(
-    clientID: "wcumxxy4hrjaurwdd8dg",
-    clientSecret: "f74fbd3a47a94dd29ce478335ac26362",
-    apiBaseURL: URL(string: "https://openapi.tuyain.com")!,
-    infraredID: "d7629f91c10f8aaa6dbtaw",
-    acRemoteID: "d7c7ddecd3c98a5a00nezc"
+    clientID: RoomSecrets.clientId,
+    clientSecret: RoomSecrets.clientSecret,
+    apiBaseURL: URL(string: RoomSecrets.apiBaseUrl) ?? URL(string: "https://openapi.tuyain.com")!,
+    infraredID: RoomSecrets.infraredId,
+    acRemoteID: RoomSecrets.acRemoteId
   )
 
   static let enterScene = AcScene(power: 1, mode: 0, temp: 24, wind: 1)

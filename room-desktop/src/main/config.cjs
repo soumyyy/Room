@@ -160,13 +160,7 @@ const LIGHT_PRESETS = [
   },
 ];
 
-const TUYA = {
-  clientId: 'wcumxxy4hrjaurwdd8dg',
-  clientSecret: 'f74fbd3a47a94dd29ce478335ac26362',
-  apiBaseUrl: 'https://openapi.tuyain.com',
-  infraredId: 'd7629f91c10f8aaa6dbtaw',
-  acRemoteId: 'd7c7ddecd3c98a5a00nezc',
-};
+const { TUYA_SECRETS: TUYA } = require('./secrets.cjs');
 
 module.exports = {
   APP_NAME: 'Room',

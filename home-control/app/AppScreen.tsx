@@ -230,12 +230,13 @@ const COLOR_ROWS = Array.from(
 );
 
 function isTuyaConfigured() {
-  return (
-    !TUYA_CLOUD.clientId.startsWith('YOUR_') &&
-    !TUYA_CLOUD.clientSecret.startsWith('YOUR_') &&
-    !TUYA_CLOUD.infraredId.startsWith('YOUR_') &&
-    !TUYA_CLOUD.acRemoteId.startsWith('YOUR_')
-  );
+  return [
+    TUYA_CLOUD.clientId,
+    TUYA_CLOUD.clientSecret,
+    TUYA_CLOUD.infraredId,
+    TUYA_CLOUD.acRemoteId,
+    TUYA_CLOUD.apiBaseUrl,
+  ].every((value) => value.length > 0);
 }
 
 function parseNumber(value: string | number | undefined, fallback: number) {

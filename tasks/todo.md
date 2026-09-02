@@ -143,6 +143,21 @@ PBXGroup is virtual — its children carry the full relative path. A bare `path`
 - [x] Removed `react-native-tcp-socket` — confirmed unused (react-native-udp bundles its own buffer/events).
       Podfile.lock down one pod; verified the bundle has zero references to it.
 
+## Done — one home for the Tuya credentials
+
+- [x] `secrets.json` (untracked) + `scripts/gen-secrets.mjs` emit the four consumers; all generated files
+      and the source are gitignored. No tracked file contains the secret any more.
+- [x] Env vars win over the file, so EAS works without the untracked file — needs `eas secret:create` for
+      `ROOM_TUYA_*` before the next cloud build.
+- [x] Missing values warn and emit empty strings rather than breaking the build. `isTuyaConfigured()` now
+      tests for non-empty instead of a `YOUR_` placeholder that no longer existed.
+- [x] `RoomSecrets.swift` added to both iOS targets and both mac targets.
+
+Note: `room-widget-mac` does not compile, and did not before this change — `RoomController.swift`
+references a `RoomStateStore` that does not exist in that project, plus two type errors in its
+`TuyaClient`. Verified by building the pre-change state. Its secrets wiring is consistent with the others
+but could not be validated by a build.
+
 ## Remaining — direction C (chosen)
 
 - [ ] `TuyaClient.fetchACStatus()` + a `getPilot` receive path in `WiZClient`
