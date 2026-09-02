@@ -17,10 +17,15 @@ struct RoomWidgetProvider: TimelineProvider {
   }
 
   func getTimeline(in context: Context, completion: @escaping (Timeline<RoomWidgetEntry>) -> Void) {
-    let entry = RoomWidgetEntry(date: .now, room: RoomSnapshotStore.load())
-    // Every intent reloads this timeline, so the scheduled wake is only a
-    // backstop for changes made outside the widget.
-    completion(Timeline(entries: [entry], policy: .after(.now.addingTimeInterval(15 * 60))))
+    Task {
+      // A timeline wake is one of the few moments this process is alive, so
+      // spend it asking the hardware rather than re-rendering what we were
+      // last told — otherwise the physical AC remote leaves the tile wrong
+      // with no way to notice.
+      let room = await RoomController.shared.refresh()
+      let entry = RoomWidgetEntry(date: .now, room: room)
+      completion(Timeline(entries: [entry], policy: .after(.now.addingTimeInterval(15 * 60))))
+    }
   }
 }
 

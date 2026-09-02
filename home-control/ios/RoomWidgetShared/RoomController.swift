@@ -136,6 +136,42 @@ actor RoomController {
     }
   }
 
+  // MARK: - Refresh
+
+  /// Asks the hardware what it is actually doing and folds the answers into the
+  /// snapshot. Each leg is independently optional: Tuya is a cloud call that
+  /// works on cellular, the bulbs only answer on the same Wi-Fi. Whatever does
+  /// not answer keeps its previously recorded value rather than being cleared,
+  /// so a refresh can improve the snapshot but never degrade it.
+  @discardableResult
+  func refresh() async -> RoomSnapshot {
+    async let scene = try? TuyaClient.shared.fetchACScene()
+    async let groups = WiZClient.shared.readGroupStates()
+
+    let resolvedScene = await scene
+    let resolvedGroups = await groups
+
+    record { snapshot in
+      if let resolvedScene {
+        snapshot.ac = resolvedScene
+      }
+
+      for (id, reading) in resolvedGroups {
+        // Keep the colour we recorded; getPilot does not name a preset.
+        var state = snapshot.lights[id] ?? reading
+        state.isOn = reading.isOn
+
+        if let brightness = reading.brightness {
+          state.brightness = brightness
+        }
+
+        snapshot.lights[id] = state
+      }
+    }
+
+    return RoomSnapshotStore.load()
+  }
+
   /// Only reached after the command succeeded, so the snapshot records what we
   /// actually asked the hardware to do rather than what we hoped.
   private func record(_ mutate: (inout RoomSnapshot) -> Void) {

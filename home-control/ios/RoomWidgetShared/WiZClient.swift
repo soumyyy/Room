@@ -127,6 +127,136 @@ actor WiZClient {
       connection.cancel()
     }
   }
+
+  // MARK: - Reading
+
+  /// Asks every bulb what it is doing and folds the answers into per-group
+  /// state. Bulbs that stay silent are simply absent from the result, so a
+  /// group nobody answered for is left alone rather than reported off.
+  func readGroupStates() async -> [String: RoomSnapshot.LightState] {
+    var states: [String: RoomSnapshot.LightState] = [:]
+
+    for group in RoomConfig.lightGroupIDs {
+      let bulbs = RoomConfig.bulbs(inGroup: group)
+
+      let readings = await withTaskGroup(of: WizReading?.self) { taskGroup -> [WizReading] in
+        for bulb in bulbs {
+          taskGroup.addTask { try? await self.readPilot(from: bulb.ip) }
+        }
+
+        var collected: [WizReading] = []
+        for await reading in taskGroup {
+          if let reading {
+            collected.append(reading)
+          }
+        }
+        return collected
+      }
+
+      if let state = RoomSnapshot.groupState(from: readings) {
+        states[group] = state
+      }
+    }
+
+    return states
+  }
+
+  private func readPilot(from host: String) async throws -> WizReading {
+    let payload = try JSONEncoder().encode(WizEnvelope(method: "getPilot", params: WizEmptyParams()))
+    let data = try await request(payload, from: host)
+    let response = try JSONDecoder().decode(WizGetPilotResponse.self, from: data)
+
+    guard let result = response.result else {
+      throw RoomNetworkError.wiz(message: "\(host) returned no pilot state.")
+    }
+
+    return WizReading(
+      isOn: result.state ?? false,
+      brightness: result.dimming.map(RoomConfig.clampBrightness)
+    )
+  }
+
+  /// Same shape as `send`, but waits for the bulb's reply.
+  private func request(_ payload: Data, from host: String) async throws -> Data {
+    guard let port = NWEndpoint.Port(rawValue: RoomConfig.wizPort) else {
+      throw RoomNetworkError.invalidURL
+    }
+
+    let connection = NWConnection(host: NWEndpoint.Host(host), port: port, using: .udp)
+    let gate = SendGate()
+    let queue = DispatchQueue.global(qos: .userInitiated)
+
+    return try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
+        func finish(_ result: Result<Data, Error>) {
+          guard gate.claim() else { return }
+          connection.stateUpdateHandler = nil
+          connection.cancel()
+          continuation.resume(with: result)
+        }
+
+        let deadline = DispatchWorkItem {
+          finish(.failure(RoomNetworkError.wiz(message: "\(host) did not answer in time.")))
+        }
+        queue.asyncAfter(deadline: .now() + RoomConfig.wizSendTimeout, execute: deadline)
+
+        connection.stateUpdateHandler = { state in
+          switch state {
+          case .ready:
+            connection.send(content: payload, completion: .contentProcessed { error in
+              if let error {
+                deadline.cancel()
+                finish(.failure(RoomNetworkError.wiz(message: error.localizedDescription)))
+                return
+              }
+
+              connection.receiveMessage { data, _, _, receiveError in
+                deadline.cancel()
+
+                if let data, !data.isEmpty {
+                  finish(.success(data))
+                } else {
+                  finish(.failure(RoomNetworkError.wiz(
+                    message: receiveError?.localizedDescription ?? "\(host) sent an empty reply."
+                  )))
+                }
+              }
+            })
+
+          case let .waiting(error):
+            deadline.cancel()
+            finish(.failure(RoomNetworkError.wiz(message: error.localizedDescription)))
+
+          case let .failed(error):
+            deadline.cancel()
+            finish(.failure(RoomNetworkError.wiz(message: error.localizedDescription)))
+
+          case .cancelled:
+            deadline.cancel()
+            finish(.failure(CancellationError()))
+
+          default:
+            break
+          }
+        }
+
+        connection.start(queue: queue)
+      }
+    } onCancel: {
+      connection.cancel()
+    }
+  }
+}
+
+private struct WizEmptyParams: Encodable {}
+
+private struct WizGetPilotResponse: Decodable {
+  struct Result: Decodable {
+    let state: Bool?
+    let dimming: Int?
+  }
+
+  let result: Result?
 }
 
 private struct WizEnvelope<Params: Encodable>: Encodable {

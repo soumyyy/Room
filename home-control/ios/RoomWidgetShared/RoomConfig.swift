@@ -83,6 +83,8 @@ enum RoomConfig {
   /// Upper bound on a single UDP send, so an unreachable LAN can never
   /// stall a widget intent past its execution budget.
   static let wizSendTimeout: TimeInterval = 2.0
+  /// URLSession defaults to 60s, which is longer than a widget refresh lives.
+  static let tuyaRequestTimeout: TimeInterval = 6.0
 
   static let minTemp = 16
   static let maxTemp = 30

@@ -52,6 +52,30 @@ struct RoomSnapshot: Codable, Sendable, Equatable {
   }
 }
 
+/// One bulb's answer to getPilot.
+struct WizReading: Sendable, Equatable {
+  let isOn: Bool
+  let brightness: Int?
+}
+
+extension RoomSnapshot {
+  /// Folds a group's bulb readings into one group state. Returns nil when no
+  /// bulb answered at all — silence means "could not look", and overwriting a
+  /// known state with `off` on a dropped packet would be a lie.
+  static func groupState(from readings: [WizReading]) -> LightState? {
+    guard !readings.isEmpty else { return nil }
+
+    let lit = readings.filter(\.isOn)
+    let levels = lit.compactMap(\.brightness)
+
+    return LightState(
+      isOn: !lit.isEmpty,
+      brightness: levels.isEmpty ? nil : levels.reduce(0, +) / levels.count,
+      presetID: nil
+    )
+  }
+}
+
 /// What one device tile shows. `unknown` is a distinct case from `off`: on a
 /// fresh install nothing has been recorded yet, and claiming the AC is off when
 /// we have simply never looked would be a lie the tile cannot back up.

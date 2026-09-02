@@ -182,6 +182,7 @@ actor TuyaClient {
 
     var request = URLRequest(url: url)
     request.httpMethod = method
+    request.timeoutInterval = RoomConfig.tuyaRequestTimeout
     if !bodyData.isEmpty {
       request.httpBody = bodyData
       request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -226,6 +227,7 @@ actor TuyaClient {
 
     var request = URLRequest(url: url)
     request.httpMethod = "GET"
+    request.timeoutInterval = RoomConfig.tuyaRequestTimeout
     signedHeaders(method: "GET", requestPath: requestPath, bodyData: Data(), accessToken: "")
       .forEach { request.setValue($1, forHTTPHeaderField: $0) }
 
