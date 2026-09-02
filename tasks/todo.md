@@ -1,0 +1,145 @@
+# Room — iOS widget + Expo fixes
+
+Scope: audit findings 2–5 from the 2026-09-03 audit, plus a widget redesign.
+
+## Done
+
+- [x] **2 · Widget could not reach the lights.** Added `NSLocalNetworkUsageDescription` to
+      `ios/RoomWidgetConfig/RoomWidgetInfo.plist`. The extension sends UDP to 192.168.29.x but only the
+      main app declared the usage string; extensions need it in their own plist or the sends are denied
+      silently while the cloud-backed AC actions keep working.
+- [x] **3 · Widget intent hung forever off Wi-Fi.** `WiZClient.send` handled only `.ready`/`.failed`, so
+      `.waiting(ENETUNREACH)` stranded the continuation. Now handles `.waiting`/`.cancelled`, adds a 2 s
+      deadline (`RoomConfig.wizSendTimeout`), and guards resume with a lock. Also made `apply` tolerant:
+      one unreachable bulb no longer fails the whole action.
+- [x] **4 · Siri phrases never registered.** `RoomIntents.swift` compiled only into the widget target, but
+      `AppShortcutsProvider` has to live in the app. Added the five shared Swift files to the app target's
+      sources phase and gated the intents with `@available(iOS 16.0, *)` so the app's 15.1 deployment
+      target still builds.
+- [x] **5 · "Leave Room" deadened the whole UI.** Removed the invisible `absoluteFillObject` Pressable in
+      `AppScreen.tsx` that swallowed every tap while out of the room, plus its style.
+- [x] **Widget redesign — direction A shipped.** Rewrote `RoomWidget.swift`: scenes take the top third and
+      the only colour, AC and Lights become named rows with a segmented On/Off. Two accents only, mapped
+      to the physical domains (amber = WiZ, cyan = AC).
+- [x] **Split the shortcuts provider.** Fix 4 put `RoomIntents.swift` — provider included — into both
+      targets, so app and extension each registered 6 App Shortcuts claiming the same phrases. Moved
+      `RoomShortcutsProvider` to `RoomWidgetShared/RoomShortcuts.swift`, app target only. Verified:
+      `Room.app` 6 shortcuts / 6 actions, `RoomWidgets.appex` 0 shortcuts / 6 actions.
+- [x] **Colour sheet filter + swatch accuracy.** Replaced the dead `ring`/`angle` radial-dial fields with
+      `kind: 'white' | 'color'`, so all 11 colours render instead of 8 and the 3 unreachable pastels appear.
+      Corrected the three white swatches to the sRGB renderings of the temperatures they actually send
+      (2700 K `#ffa757`, 4200 K `#ffd3af`, 6500 K `#fffefa` — each was about one step too cool). Pastels now
+      drive the bulb's white LED for the shared component and RGB for the residual chroma. Padded the short
+      final palette row so `flex: 1` tiles keep an even width. Deleted `getColorNodePosition` and the five
+      geometry constants it was the only reader of.
+- [x] Prototypes published: https://claude.ai/code/artifact/ae0388bd-d419-40b7-80ac-3ffdbd935350
+
+## Done — Siri control (AC temperature + lights)
+
+Constraint that shapes it: App Shortcut phrases can only interpolate `AppEnum`/`AppEntity` parameters,
+not a bare `Int`. Spoken values therefore need enums; the Shortcuts app can still take free `Int` input.
+
+- [x] `TuyaClient.fetchACScene()` — GET `ac/status`, with a `LooseInt` decoder because Tuya returns these
+      fields as numbers on some remotes and numeric strings on others; same field precedence as app/tuya.ts
+- [x] `RoomController.amendScene` — read, edit one field, send the whole scene back, forcing power on
+- [x] 7 `AppEnum`s: `ACTemperature` (16–30), `ACModeOption`, `FanSpeedOption`, `LightGroup`,
+      `TemperatureShift`, `BrightnessStep`, `LightColorOption` (all 14 presets)
+- [x] 6 new intents: `SetACTemperature`, `AdjustACTemperature`, `SetACMode`, `SetFanSpeed`,
+      `SetLightBrightness`, `SetLightColor`; `LightsOn`/`LightsOff` gained a `LightGroup` parameter
+- [x] `BulbConfig.group` + `RoomConfig.bulbs(inGroup:)` mirroring BULB_GROUPS
+- [x] 10 spoken shortcuts (Apple's recommended ceiling). `SetACMode`/`SetFanSpeed` are intentionally not
+      spoken shortcuts — still available in the Shortcuts app
+- [ ] Decide the `seafoam`/`lavender`/`blush` question: expose them in the app's colour sheet, or cut them,
+      — RESOLVED: filter fixed, all 14 presets reachable, so a `LightColor` enum can expose the same set
+
+Verified from the built bundle: `Room.app` carries 10 autoShortcuts, 12 actions, 7 enums; the extension
+carries 0 shortcuts but all 12 actions, so widget buttons still run in-process. Both targets build.
+
+Still unverified: no Siri phrase has been spoken and no Tuya `ac/status` response has been parsed against
+the real remote — `LooseInt` and the field precedence are modelled on app/tuya.ts, not on a captured
+response.
+
+## Done — App Group + snapshot
+
+- [x] `com.apple.security.application-groups` = `group.org.name.homecontrol` on both targets.
+      `homecontrol/Room.entitlements` was an empty `<dict/>`; the widget had no entitlements file at all,
+      so `RoomWidgetConfig/RoomWidgets.entitlements` is new and `CODE_SIGN_ENTITLEMENTS` is wired into both
+      widget build configs.
+- [x] `RoomSnapshot` — AC scene plus per-group light state, every field optional-by-absence so a room we
+      have never observed reports `nil` rather than `false`.
+- [x] `RoomSnapshotStore` — synchronous shared-container read/write with a lock around read-modify-write.
+      Dropped an `isAvailable` check I first wrote: `UserDefaults(suiteName:)` returns a usable object even
+      without the entitlement, so it could never have detected a missing App Group. An absent `updatedAt`
+      is the honest signal.
+- [x] `RoomController.record` after every successful mutation — 10 call sites, including `acStatus()`, so a
+      read refreshes the widget too.
+- [x] Widget reads it: entry carries the snapshot, timeline is `.after(15 min)` instead of `.never`, and the
+      device rows now light the segment that reflects reality. Unknown lights neither segment.
+- [x] 28 assertions over the snapshot, group resolution, scene clamping, store round-trip and presets,
+      compiled and run natively — all pass.
+
+## Done — native bridge + foreground refresh
+
+- [x] `RoomSnapshotBridge` (Swift + `.m` via `RCT_EXTERN_MODULE`), app target only. Exposes `recordAC` and
+      `recordLights`, and calls `reloadTimelines` — from the foreground app that reload is immediate and is
+      not charged against the widget's refresh budget.
+- [x] `app/roomSnapshot.ts` — every call guarded and swallowing errors, since a stale widget must never be
+      able to break the app. Absent on Android and in Expo Go.
+- [x] Wired into the three choke points in `AppScreen.tsx`: `loadStatus`, `submitAcScene` (both the
+      confirmed and fallback branches) and `runGroupCommand`. `applyPreset` passes its `presetId` through a
+      new optional argument.
+- [x] Foreground refresh via `AppState` — audit finding 7. Without it the app would show whatever it last
+      rendered and send those stale values back after any Siri or widget change.
+
+Note: file references for the bridge needed `name` + `path = homecontrol/...` because the `homecontrol`
+PBXGroup is virtual — its children carry the full relative path. A bare `path` made Xcode look in `ios/`.
+
+## Verified since
+
+- [x] Room's JS bundles cleanly with all the new code — served on a spare port and grepped:
+      `RoomSnapshotBridge`, `recordLights`, `Seafoam`, `Warm White` and the bulb IPs all present.
+
+- [x] App Group is live on both App IDs. Decoded from the team provisioning profiles Xcode fetched:
+      `org.name.homecontrol` and `org.name.homecontrol.widgets` both carry
+      `com.apple.security.application-groups = ['group.org.name.homecontrol']`. Step 01 is done.
+
+## Done — direction C tiles
+
+- [x] Widget rebuilt as the Live Grid: one tile per device showing its current reading, tapping toggles it.
+      Four controls instead of six, because a tile that shows state needs no separate "off" twin.
+- [x] `DeviceReading` lives in `RoomSnapshot`, not the view — it is domain logic, and putting it there made
+      it testable natively. `unknown` / `off` / `on(value)` are three distinct cases: a fresh install shows
+      an em dash rather than claiming the AC is off.
+- [x] The tile picks its intent from state — lit tiles carry the Off intent, dark ones the On intent, and an
+      unobserved tile offers On, which is the useful guess when we cannot know.
+- [x] 37 assertions pass (28 snapshot/config + 9 tile readings). Both simulator and device SDKs build.
+
+## Remaining — direction C (chosen)
+
+- [ ] `TuyaClient.fetchACStatus()` + a `getPilot` receive path in `WiZClient`
+- [ ] Read-after-write inside each intent's `perform()`: send, re-read the device, write the snapshot,
+      return — this is the only moment the extension is genuinely alive, so it's where accuracy comes from
+- [ ] `reloadAllTimelines()` from the app whenever `AppScreen.tsx` commits a change (immediate, unbudgeted)
+- [ ] Real `TimelineProvider` replacing the single `.never` entry
+- [ ] Refresh `AppScreen.tsx` on foreground — it loads status once on mount, so a Siri or widget change
+      leaves the app showing stale numbers it will happily send back (audit finding 7)
+- [ ] Verify on a real Home Screen, and the phrases with Siri *(needs a device)*
+
+## Review
+
+Verified by build, not by assertion: `xcodebuild -target RoomWidgets` and
+`xcodebuild -workspace homecontrol.xcworkspace -scheme homecontrol` both succeed, and
+`Room.app/Metadata.appintents/extract.actionsdata` now contains all six intents — proof fix 4 landed,
+since that file did not exist before. `tsc --noEmit` clean.
+
+Needs a device check: the pastel presets now send WiZ's `c`/`w` white-LED channels alongside RGB. That is
+how an RGBCW bulb produces a desaturated colour, and every swatch reconstructs exactly from its params, but
+I could not confirm the firmware honours those keys. If Seafoam/Lavender/Blush come out wrong, reverting is
+one edit — drop `c`/`w` and restore the plain `r`/`g`/`b` triples. Worst case is three presets that were
+unreachable before looking wrong.
+
+Not verified: nothing has been run on a device or simulator Home Screen. Widget rendering, whether the
+intents actually fire, and whether fix 2 truly unblocks the UDP sends are all unconfirmed until installed.
+
+Left undone deliberately: audit findings 1 (Tuya client secret committed and shipped in the IPA — needs a
+key rotation and a signing proxy), 6–9, and the cleanup list.
