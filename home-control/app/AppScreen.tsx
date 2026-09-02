@@ -332,6 +332,13 @@ function mergeBulbStatuses(current: BulbState[], statuses: WizPilotStatus[]) {
   });
 }
 
+/// The colour picker can address 'all', but colour is stored per real group so
+/// every reader works off the same keys. Selecting on the combined tile used to
+/// write under 'all', which nothing ever read back.
+function groupIdsFor(group: BulbGroupConfig): string[] {
+  return group.id === ALL_LIGHTS_GROUP.id ? BULB_GROUPS.map((entry) => entry.id) : [group.id];
+}
+
 function bulbsForGroup<T extends BulbConfig>(group: BulbGroupConfig, bulbs: T[]): T[] {
   return bulbs.filter((bulb) => group.bulbIds.includes(bulb.id));
 }
@@ -441,7 +448,7 @@ export default function AppScreen() {
 
   async function loadStatus(options?: { showLoader?: boolean }) {
     if (!tuyaReady) {
-      showErrorToast('Fill in your Tuya credentials in app/config.ts.');
+      showErrorToast('AC control is not configured.');
       setLoadingStatus(false);
       return;
     }
@@ -598,29 +605,48 @@ export default function AppScreen() {
     }
   }
 
-  async function toggleGroupPower(group: BulbGroupConfig) {
+  /// Resolves which bulbs of `group` we can act on and whether they are lit,
+  /// preferring what we already know. Every command merges fresh statuses back
+  /// in, so local state is current after the first read — and skipping that
+  /// round trip is the difference between a tap feeling instant and feeling
+  /// like it took a second.
+  async function reachableBulbs(group: BulbGroupConfig): Promise<BulbState[] | null> {
+    const members = bulbsForGroup(group, bulbs);
+
+    if (members.some((bulb) => bulb.available !== null)) {
+      return members.filter((bulb) => bulb.available !== false);
+    }
+
     const statuses = await syncGroupStatus(group);
 
     if (!statuses) {
+      return null;
+    }
+
+    return statuses
+      .filter((status) => status.available)
+      .flatMap((status) => {
+        const member = members.find((bulb) => bulb.id === status.id);
+        return member ? [{ ...member, isOn: status.isOn, available: true }] : [];
+      });
+  }
+
+  async function toggleGroupPower(group: BulbGroupConfig) {
+    const reachable = await reachableBulbs(group);
+
+    if (!reachable) {
       return;
     }
 
-    const availableStatuses = statuses.filter((status) => status.available);
-
-    if (!availableStatuses.length) {
+    if (!reachable.length) {
       showErrorToast(`${group.name} unavailable`);
       return;
     }
 
-    const availableIds = new Set(availableStatuses.map((status) => status.id));
-    const availableGroup = {
-      ...group,
-      bulbIds: group.bulbIds.filter((id) => availableIds.has(id)),
-    };
-    const shouldTurnOn = !availableStatuses.some((status) => status.isOn);
+    const shouldTurnOn = !reachable.some((bulb) => bulb.isOn);
 
     await runGroupCommand(
-      availableGroup,
+      { ...group, bulbIds: reachable.map((bulb) => bulb.id) },
       (current) => ({ ...current, isOn: shouldTurnOn }),
       { state: shouldTurnOn },
     );
@@ -644,18 +670,21 @@ export default function AppScreen() {
     }
 
     try {
-      const statuses = await getWizStatuses(BULBS);
-      setBulbs((current) => mergeBulbStatuses(current, statuses));
+      const reachablePerGroup = await Promise.all(BULB_GROUPS.map(reachableBulbs));
 
-      const availableStatuses = statuses.filter((status) => status.available);
+      if (reachablePerGroup.some((entry) => entry === null)) {
+        return;
+      }
 
-      if (!availableStatuses.length) {
+      const reachable = reachablePerGroup.flatMap((entry) => entry ?? []);
+
+      if (!reachable.length) {
         showErrorToast('Lights unavailable');
         return;
       }
 
-      const availableIds = new Set(availableStatuses.map((status) => status.id));
-      const shouldTurnOn = !availableStatuses.some((status) => status.isOn);
+      const availableIds = new Set(reachable.map((bulb) => bulb.id));
+      const shouldTurnOn = !reachable.some((bulb) => bulb.isOn);
 
       await Promise.all(
         BULB_GROUPS.map((group) => {
@@ -1204,7 +1233,13 @@ export default function AppScreen() {
 
         const sheetMembers = bulbsForGroup(sheetGroup, bulbs);
         const sheetGroupBusy = sheetMembers.some((b) => b.busy);
-        const sheetActiveColorId = selectedGroupColor[sheetGroup.id] ?? 'warm-white';
+        // With 'all' open, only highlight a chip when every group agrees.
+        const sheetColorIds = groupIdsFor(sheetGroup).map(
+          (id) => selectedGroupColor[id] ?? 'warm-white',
+        );
+        const sheetActiveColorId = sheetColorIds.every((id) => id === sheetColorIds[0])
+          ? sheetColorIds[0]
+          : null;
 
         async function applyPreset(preset: GroupColorPreset) {
           const ok = await runGroupCommand(
@@ -1214,7 +1249,10 @@ export default function AppScreen() {
             { presetId: preset.id },
           );
           if (ok) {
-            setSelectedGroupColor((c) => ({ ...c, [sheetGroup!.id]: preset.id }));
+            setSelectedGroupColor((current) => ({
+              ...current,
+              ...Object.fromEntries(groupIdsFor(sheetGroup!).map((id) => [id, preset.id])),
+            }));
           }
         }
 
@@ -1424,28 +1462,6 @@ const styles = StyleSheet.create({
   },
 
   // ── Header ────────────────────────────────────────────────────────────────
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 40,
-    marginTop: 4,
-  },
-  headerLabel: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-  },
-  connDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#2c2c2e',
-  },
-  connDotOnline: {
-    backgroundColor: '#30d158',
-  },
 
   // ── AC Hero ───────────────────────────────────────────────────────────────
   acHero: {
@@ -1607,23 +1623,11 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     marginBottom: 12,
   },
-  pillCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    marginBottom: 14,
-  },
   pillSectionLabel: {
     color: '#48484a',
     fontSize: 12,
     fontWeight: '500',
     letterSpacing: 0.4,
-  },
-  pillCardValue: {
-    color: '#636366',
-    fontSize: 13,
-    fontWeight: '500',
   },
   pillRail: {
     gap: 8,
@@ -1678,14 +1682,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderWidth: 1,
     borderColor: '#ffffff08',
-  },
-  allLightsBtnText: {
-    color: '#48484a',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  allLightsBtnTextOn: {
-    color: '#ff9f0a',
   },
   lightSplitBtn: {
     width: 38,
@@ -1861,9 +1857,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
   },
-  sheetSectionLast: {
-    paddingBottom: 4,
-  },
   sheetSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1898,43 +1891,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     borderRadius: 17,
     backgroundColor: '#ffffff',
-  },
-  brightnessControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  brightnessAction: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: '#111214',
-    borderWidth: 1,
-    borderColor: '#1f2023',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brightnessActionText: {
-    color: '#ffffff',
-    fontSize: 24,
-    fontWeight: '500',
-    marginTop: -1,
-  },
-  brightnessValuePill: {
-    flex: 1,
-    minHeight: 48,
-    borderRadius: 16,
-    backgroundColor: '#111214',
-    borderWidth: 1,
-    borderColor: '#1f2023',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brightnessValuePillText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.1,
   },
   colorPaletteStack: {
     gap: 8,

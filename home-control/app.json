@@ -12,7 +12,9 @@
           "NSAllowsLocalNetworking": true
         },
         "NSLocalNetworkUsageDescription": "Room uses your local network to control WiZ lights.",
-        "RCTNewArchEnabled": false
+        "RCTNewArchEnabled": false,
+        "UIUserInterfaceStyle": "Dark",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "org.name.homecontrol",
       "runtimeVersion": "1.0.0"
