@@ -22,6 +22,59 @@ private struct TuyaTokenCache: Sendable {
   var expiresAt: Date = .distantPast
 }
 
+/// Tuya reports scene fields as numbers on some remotes and as numeric strings
+/// on others, so accept either rather than failing the whole decode.
+private struct LooseInt: Decodable {
+  let value: Int?
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.singleValueContainer()
+
+    if let int = try? container.decode(Int.self) {
+      value = int
+    } else if let double = try? container.decode(Double.self), double.isFinite {
+      value = Int(double)
+    } else if let string = try? container.decode(String.self) {
+      if let int = Int(string) {
+        value = int
+      } else if let double = Double(string), double.isFinite {
+        value = Int(double)
+      } else {
+        value = nil
+      }
+    } else {
+      value = nil
+    }
+  }
+}
+
+private struct TuyaACStatusResult: Decodable {
+  let power_open: Bool?
+  let power: LooseInt?
+  let mode: LooseInt?
+  let temp: LooseInt?
+  let temperature: LooseInt?
+  let fan: LooseInt?
+  let wind: LooseInt?
+
+  /// Same precedence the TypeScript client uses in app/tuya.ts.
+  var scene: AcScene {
+    let resolvedPower: Int
+    if let power_open {
+      resolvedPower = power_open ? 1 : 0
+    } else {
+      resolvedPower = power?.value ?? RoomConfig.acOffScene.power
+    }
+
+    return AcScene(
+      power: RoomConfig.clampPower(resolvedPower),
+      mode: RoomConfig.clampMode(mode?.value ?? RoomConfig.acOnScene.mode),
+      temp: RoomConfig.clampTemp(temperature?.value ?? temp?.value ?? RoomConfig.acOnScene.temp),
+      wind: RoomConfig.clampWind(fan?.value ?? wind?.value ?? RoomConfig.acOnScene.wind)
+    )
+  }
+}
+
 enum RoomNetworkError: LocalizedError {
   case invalidURL
   case invalidResponse
@@ -55,15 +108,42 @@ actor TuyaClient {
     )
   }
 
+  /// The scene the IR remote believes the unit is holding. Note this is the
+  /// blaster's own model, not a reading from the air conditioner — reach for
+  /// the physical remote and Tuya will not know.
+  func fetchACScene() async throws -> AcScene {
+    let result = try await request(
+      method: "GET",
+      path: "/v2.0/infrareds/\(RoomConfig.tuya.infraredID)/remotes/\(RoomConfig.tuya.acRemoteID)/ac/status",
+      expecting: TuyaACStatusResult.self
+    )
+
+    return result.scene
+  }
+
   private func request<Result: Decodable, Body: Encodable>(
     method: String,
     path: String,
     query: [String: CustomStringConvertible] = [:],
-    body: Body? = nil,
+    body: Body,
+    expecting: Result.Type
+  ) async throws -> Result {
+    try await request(
+      method: method,
+      path: path,
+      query: query,
+      bodyData: try JSONEncoder().encode(body),
+      expecting: Result.self
+    )
+  }
+
+  private func request<Result: Decodable>(
+    method: String,
+    path: String,
+    query: [String: CustomStringConvertible] = [:],
+    bodyData: Data = Data(),
     expecting _: Result.Type
   ) async throws -> Result {
-    let bodyData = try body.map { try JSONEncoder().encode($0) } ?? Data()
-
     do {
       return try await performRequest(
         method: method,

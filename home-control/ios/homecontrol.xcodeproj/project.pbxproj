@@ -17,6 +17,16 @@
 		439A7C34FEE74E33987A48ED /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 32A0A62A2D53507EEFA86135 /* PrivacyInfo.xcprivacy */; };
 		88B02693A1F55E6E31A1C86F /* RoomIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67AADE6B4EA3C2E67B6863C5 /* RoomIntents.swift */; };
 		944460F0553BCAD8377BEED6 /* TuyaClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8F019C8294AD618476C566A /* TuyaClient.swift */; };
+		A1C0DE0000000000000000A1 /* RoomConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86A0A1449F6FBB5850377500 /* RoomConfig.swift */; };
+		A1C0DE0000000000000000A2 /* RoomController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F84254A5A7AE821FB733686 /* RoomController.swift */; };
+		A1C0DE0000000000000000A3 /* RoomIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67AADE6B4EA3C2E67B6863C5 /* RoomIntents.swift */; };
+		A1C0DE0000000000000000A4 /* TuyaClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8F019C8294AD618476C566A /* TuyaClient.swift */; };
+		A1C0DE0000000000000000A5 /* WiZClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C03EC9EAD47E87D0EE8F9D2 /* WiZClient.swift */; };
+		A1C0DE0000000000000000B2 /* RoomShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE0000000000000000B1 /* RoomShortcuts.swift */; };
+		A1C0DE0000000000000000C2 /* RoomSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE0000000000000000C1 /* RoomSnapshot.swift */; };
+		A1C0DE0000000000000000C3 /* RoomSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE0000000000000000C1 /* RoomSnapshot.swift */; };
+		A1C0DE0000000000000000D2 /* RoomSnapshotBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE0000000000000000D1 /* RoomSnapshotBridge.swift */; };
+		A1C0DE0000000000000000D4 /* RoomSnapshotBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE0000000000000000D3 /* RoomSnapshotBridge.m */; };
 		AED45C8F46C552F2EA0ACC81 /* RoomWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2659AA91764E3956F827427A /* RoomWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		EAE04F6A16D68EADE5457F7B /* RoomWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A2F4F876812695AC375558 /* RoomWidget.swift */; };
@@ -48,12 +58,12 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		13B07F961A680F5B00A75B9A /* homecontrol.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = homecontrol.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		13B07F961A680F5B00A75B9A /* Room.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Room.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = homecontrol/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = homecontrol/Info.plist; sourceTree = "<group>"; };
 		17DA5668924D6DE785BD94CF /* libPods-homecontrol.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-homecontrol.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2659AA91764E3956F827427A /* RoomWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RoomWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		32A0A62A2D53507EEFA86135 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = homecontrol/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		32A0A62A2D53507EEFA86135 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = homecontrol/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		4C03EC9EAD47E87D0EE8F9D2 /* WiZClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WiZClient.swift; sourceTree = "<group>"; };
 		4F84254A5A7AE821FB733686 /* RoomController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomController.swift; sourceTree = "<group>"; };
 		5AB1E0012A1B000000000002 /* RoomWidgetInfo.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = RoomWidgetInfo.plist; sourceTree = "<group>"; };
@@ -62,6 +72,10 @@
 		6D59B303C2B456354B37EDEC /* Pods-homecontrol.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-homecontrol.release.xcconfig"; path = "Target Support Files/Pods-homecontrol/Pods-homecontrol.release.xcconfig"; sourceTree = "<group>"; };
 		81A2F4F876812695AC375558 /* RoomWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomWidget.swift; sourceTree = "<group>"; };
 		86A0A1449F6FBB5850377500 /* RoomConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomConfig.swift; sourceTree = "<group>"; };
+		A1C0DE0000000000000000B1 /* RoomShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomShortcuts.swift; sourceTree = "<group>"; };
+		A1C0DE0000000000000000C1 /* RoomSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomSnapshot.swift; sourceTree = "<group>"; };
+		A1C0DE0000000000000000D1 /* RoomSnapshotBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RoomSnapshotBridge.swift; path = homecontrol/RoomSnapshotBridge.swift; sourceTree = "<group>"; };
+		A1C0DE0000000000000000D3 /* RoomSnapshotBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = RoomSnapshotBridge.m; path = homecontrol/RoomSnapshotBridge.m; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = homecontrol/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
 		D5F5FF22B040CEE962817EEF /* Pods-homecontrol.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-homecontrol.debug.xcconfig"; path = "Target Support Files/Pods-homecontrol/Pods-homecontrol.debug.xcconfig"; sourceTree = "<group>"; };
@@ -87,6 +101,8 @@
 			isa = PBXGroup;
 			children = (
 				F11748412D0307B40044C1D9 /* AppDelegate.swift */,
+				A1C0DE0000000000000000D1 /* RoomSnapshotBridge.swift */,
+				A1C0DE0000000000000000D3 /* RoomSnapshotBridge.m */,
 				F11748442D0722820044C1D9 /* homecontrol-Bridging-Header.h */,
 				BB2F792B24A3F905000567C9 /* Supporting */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
@@ -150,7 +166,7 @@
 		83CBBA001A601CBA00E9B192 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				13B07F961A680F5B00A75B9A /* homecontrol.app */,
+				13B07F961A680F5B00A75B9A /* Room.app */,
 				2659AA91764E3956F827427A /* RoomWidgets.appex */,
 			);
 			name = Products;
@@ -187,7 +203,6 @@
 				D5F5FF22B040CEE962817EEF /* Pods-homecontrol.debug.xcconfig */,
 				6D59B303C2B456354B37EDEC /* Pods-homecontrol.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -197,6 +212,8 @@
 				86A0A1449F6FBB5850377500 /* RoomConfig.swift */,
 				4F84254A5A7AE821FB733686 /* RoomController.swift */,
 				67AADE6B4EA3C2E67B6863C5 /* RoomIntents.swift */,
+				A1C0DE0000000000000000C1 /* RoomSnapshot.swift */,
+				A1C0DE0000000000000000B1 /* RoomShortcuts.swift */,
 				D8F019C8294AD618476C566A /* TuyaClient.swift */,
 				4C03EC9EAD47E87D0EE8F9D2 /* WiZClient.swift */,
 			);
@@ -227,7 +244,7 @@
 			);
 			name = homecontrol;
 			productName = homecontrol;
-			productReference = 13B07F961A680F5B00A75B9A /* homecontrol.app */;
+			productReference = 13B07F961A680F5B00A75B9A /* Room.app */;
 			productType = "com.apple.product-type.application";
 		};
 		4BB1778B23C486BEC513D3C6 /* RoomWidgets */ = {
@@ -413,7 +430,16 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
+				A1C0DE0000000000000000D2 /* RoomSnapshotBridge.swift in Sources */,
+				A1C0DE0000000000000000D4 /* RoomSnapshotBridge.m in Sources */,
 				241259F1885EC99865125BF4 /* ExpoModulesProvider.swift in Sources */,
+				A1C0DE0000000000000000A1 /* RoomConfig.swift in Sources */,
+				A1C0DE0000000000000000A2 /* RoomController.swift in Sources */,
+				A1C0DE0000000000000000A3 /* RoomIntents.swift in Sources */,
+				A1C0DE0000000000000000B2 /* RoomShortcuts.swift in Sources */,
+				A1C0DE0000000000000000C2 /* RoomSnapshot.swift in Sources */,
+				A1C0DE0000000000000000A4 /* TuyaClient.swift in Sources */,
+				A1C0DE0000000000000000A5 /* WiZClient.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -424,6 +450,7 @@
 				2D67300C36B9AAE595854801 /* RoomConfig.swift in Sources */,
 				1403EEA4C408E87655D2A8BF /* RoomController.swift in Sources */,
 				88B02693A1F55E6E31A1C86F /* RoomIntents.swift in Sources */,
+				A1C0DE0000000000000000C3 /* RoomSnapshot.swift in Sources */,
 				EAE04F6A16D68EADE5457F7B /* RoomWidget.swift in Sources */,
 				944460F0553BCAD8377BEED6 /* TuyaClient.swift in Sources */,
 				1F2F2DADD2F8776591B0446B /* WiZClient.swift in Sources */,
@@ -449,6 +476,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = homecontrol/Room.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 4W769MPDJ6;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
@@ -485,6 +513,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = homecontrol/Room.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 4W769MPDJ6;
 				INFOPLIST_FILE = homecontrol/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -512,7 +541,9 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = RoomWidgetConfig/RoomWidgets.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 4W769MPDJ6;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = RoomWidgetConfig/RoomWidgetInfo.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -656,7 +687,9 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = RoomWidgetConfig/RoomWidgets.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 4W769MPDJ6;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = RoomWidgetConfig/RoomWidgetInfo.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
