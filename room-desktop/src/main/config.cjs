@@ -1,14 +1,6 @@
-const BULBS = [
-  { id: 'left-1', name: 'Left Light 1', ip: '192.168.29.131' },
-  { id: 'left-2', name: 'Left Light 2', ip: '192.168.29.180' },
-  { id: 'right-1', name: 'Right Light 1', ip: '192.168.29.116' },
-  { id: 'right-2', name: 'Right Light 2', ip: '192.168.29.151' },
-];
+const BULBS = BULBS_GENERATED;
 
-const BULB_GROUPS = [
-  { id: 'left', name: 'Left Lights', bulbIds: ['left-1', 'left-2'] },
-  { id: 'right', name: 'Right Lights', bulbIds: ['right-1', 'right-2'] },
-];
+const BULB_GROUPS = BULB_GROUPS_GENERATED;
 
 const AC_PRESETS = [
   {
@@ -160,7 +152,11 @@ const LIGHT_PRESETS = [
   },
 ];
 
-const { TUYA_SECRETS: TUYA } = require('./secrets.cjs');
+const {
+  TUYA_SECRETS: TUYA,
+  BULBS_GENERATED,
+  BULB_GROUPS_GENERATED,
+} = require('./generated.cjs');
 
 module.exports = {
   APP_NAME: 'Room',

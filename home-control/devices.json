@@ -1,0 +1,12 @@
+{
+  "bulbs": [
+    { "id": "left-1", "name": "Left Light 1", "ip": "192.168.29.131", "group": "left" },
+    { "id": "left-2", "name": "Left Light 2", "ip": "192.168.29.180", "group": "left" },
+    { "id": "right-1", "name": "Right Light 1", "ip": "192.168.29.116", "group": "right" },
+    { "id": "right-2", "name": "Right Light 2", "ip": "192.168.29.151", "group": "right" }
+  ],
+  "groups": [
+    { "id": "left", "name": "Left Lights" },
+    { "id": "right", "name": "Right Lights" }
+  ]
+}

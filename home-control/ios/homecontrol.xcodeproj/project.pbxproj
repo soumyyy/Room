@@ -31,8 +31,8 @@
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		EAE04F6A16D68EADE5457F7B /* RoomWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A2F4F876812695AC375558 /* RoomWidget.swift */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
-		A1C0DE0000000000000000E2 /* RoomSecrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE0000000000000000E1 /* RoomSecrets.swift */; };
-		A1C0DE0000000000000000E3 /* RoomSecrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE0000000000000000E1 /* RoomSecrets.swift */; };
+		A1C0DE0000000000000000E2 /* RoomGenerated.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE0000000000000000E1 /* RoomGenerated.swift */; };
+		A1C0DE0000000000000000E3 /* RoomGenerated.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE0000000000000000E1 /* RoomGenerated.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -74,7 +74,7 @@
 		6D59B303C2B456354B37EDEC /* Pods-homecontrol.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-homecontrol.release.xcconfig"; path = "Target Support Files/Pods-homecontrol/Pods-homecontrol.release.xcconfig"; sourceTree = "<group>"; };
 		81A2F4F876812695AC375558 /* RoomWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomWidget.swift; sourceTree = "<group>"; };
 		86A0A1449F6FBB5850377500 /* RoomConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomConfig.swift; sourceTree = "<group>"; };
-		A1C0DE0000000000000000E1 /* RoomSecrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomSecrets.swift; sourceTree = "<group>"; };
+		A1C0DE0000000000000000E1 /* RoomGenerated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomGenerated.swift; sourceTree = "<group>"; };
 		A1C0DE0000000000000000B1 /* RoomShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomShortcuts.swift; sourceTree = "<group>"; };
 		A1C0DE0000000000000000C1 /* RoomSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomSnapshot.swift; sourceTree = "<group>"; };
 		A1C0DE0000000000000000D1 /* RoomSnapshotBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RoomSnapshotBridge.swift; path = homecontrol/RoomSnapshotBridge.swift; sourceTree = "<group>"; };
@@ -213,7 +213,7 @@
 			isa = PBXGroup;
 			children = (
 				86A0A1449F6FBB5850377500 /* RoomConfig.swift */,
-				A1C0DE0000000000000000E1 /* RoomSecrets.swift */,
+				A1C0DE0000000000000000E1 /* RoomGenerated.swift */,
 				4F84254A5A7AE821FB733686 /* RoomController.swift */,
 				67AADE6B4EA3C2E67B6863C5 /* RoomIntents.swift */,
 				A1C0DE0000000000000000C1 /* RoomSnapshot.swift */,
@@ -442,7 +442,7 @@
 				A1C0DE0000000000000000D4 /* RoomSnapshotBridge.m in Sources */,
 				241259F1885EC99865125BF4 /* ExpoModulesProvider.swift in Sources */,
 				A1C0DE0000000000000000A1 /* RoomConfig.swift in Sources */,
-				A1C0DE0000000000000000E2 /* RoomSecrets.swift in Sources */,
+				A1C0DE0000000000000000E2 /* RoomGenerated.swift in Sources */,
 				A1C0DE0000000000000000A2 /* RoomController.swift in Sources */,
 				A1C0DE0000000000000000A3 /* RoomIntents.swift in Sources */,
 				A1C0DE0000000000000000B2 /* RoomShortcuts.swift in Sources */,
@@ -457,7 +457,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2D67300C36B9AAE595854801 /* RoomConfig.swift in Sources */,
-				A1C0DE0000000000000000E3 /* RoomSecrets.swift in Sources */,
+				A1C0DE0000000000000000E3 /* RoomGenerated.swift in Sources */,
 				1403EEA4C408E87655D2A8BF /* RoomController.swift in Sources */,
 				88B02693A1F55E6E31A1C86F /* RoomIntents.swift in Sources */,
 				A1C0DE0000000000000000C3 /* RoomSnapshot.swift in Sources */,

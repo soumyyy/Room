@@ -58,12 +58,9 @@ enum RoomConfig {
   static let wizReadTimeoutNanoseconds: UInt64 = 1_500_000_000
   static let wizRetryDelayNanoseconds: UInt64 = 75_000_000
 
-  static let bulbs: [BulbConfig] = [
-    .init(id: "left-1", name: "Left Light 1", ip: "192.168.29.131"),
-    .init(id: "left-2", name: "Left Light 2", ip: "192.168.29.180"),
-    .init(id: "right-1", name: "Right Light 1", ip: "192.168.29.116"),
-    .init(id: "right-2", name: "Right Light 2", ip: "192.168.29.151"),
-  ]
+  static let bulbs: [BulbConfig] = RoomDevices.bulbs.map {
+    BulbConfig(id: $0.id, name: $0.name, ip: $0.ip)
+  }
 
   static let tuya = TuyaConfig(
     clientID: RoomSecrets.clientId,

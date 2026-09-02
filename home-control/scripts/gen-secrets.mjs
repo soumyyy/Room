@@ -1,6 +1,9 @@
 #!/usr/bin/env node
-// Emits the Tuya credentials into every project that needs them, so there is
-// one place to edit instead of four copies that drift.
+// Emits the Tuya credentials and the bulb inventory into every project that
+// needs them, so there is one place to edit instead of four copies that drift.
+//
+// secrets.json is untracked; devices.json is tracked, because a bulb's IP is
+// not a secret — it just used to be copied into four files, and DHCP moves it.
 //
 // Values come from the environment first (that is how EAS supplies them, since
 // secrets.json is untracked and never reaches a build server), otherwise from
@@ -33,6 +36,22 @@ function readFile() {
   }
 }
 
+function readDevices() {
+  const path = join(homeControl, 'devices.json');
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'));
+  } catch (error) {
+    throw new Error(`devices.json is missing or invalid: ${error.message}`);
+  }
+}
+
+const devices = readDevices();
+const bulbs = devices.bulbs ?? [];
+const groups = (devices.groups ?? []).map((group) => ({
+  ...group,
+  bulbIds: bulbs.filter((bulb) => bulb.group === group.id).map((bulb) => bulb.id),
+}));
+
 const fromFile = readFile();
 const tuya = Object.fromEntries(
   FIELDS.map(([key, envName]) => [key, process.env[envName] ?? fromFile[key] ?? '']),
@@ -52,30 +71,44 @@ const q = (value) => JSON.stringify(value);
 
 const outputs = [
   {
-    path: join(homeControl, 'app', 'config.secrets.ts'),
+    path: join(homeControl, 'app', 'config.generated.ts'),
     contents: `// ${BANNER}
 
 export const TUYA_SECRETS = {
 ${FIELDS.map(([key]) => `  ${key}: ${q(tuya[key])},`).join('\n')}
 } as const;
+
+export const BULBS_GENERATED = ${JSON.stringify(bulbs, null, 2).replace(/\n/g, '\n')};
+
+export const BULB_GROUPS_GENERATED = ${JSON.stringify(
+      groups.map(({ id, name, bulbIds }) => ({ id, name, bulbIds })),
+      null,
+      2,
+    )};
 `,
   },
   {
-    path: join(homeControl, 'ios', 'RoomWidgetShared', 'RoomSecrets.swift'),
+    path: join(homeControl, 'ios', 'RoomWidgetShared', 'RoomGenerated.swift'),
     contents: swift(),
   },
   {
-    path: join(repoRoot, 'room-widget-mac', 'Sources', 'Shared', 'RoomSecrets.swift'),
+    path: join(repoRoot, 'room-widget-mac', 'Sources', 'Shared', 'RoomGenerated.swift'),
     contents: swift(),
   },
   {
-    path: join(repoRoot, 'room-desktop', 'src', 'main', 'secrets.cjs'),
+    path: join(repoRoot, 'room-desktop', 'src', 'main', 'generated.cjs'),
     contents: `// ${BANNER}
 
 module.exports = {
   TUYA_SECRETS: {
 ${FIELDS.map(([key]) => `    ${key}: ${q(tuya[key])},`).join('\n')}
   },
+  BULBS_GENERATED: ${JSON.stringify(bulbs, null, 2)},
+  BULB_GROUPS_GENERATED: ${JSON.stringify(
+    groups.map(({ id, name, bulbIds }) => ({ id, name, bulbIds })),
+    null,
+    2,
+  )},
 };
 `,
   },
@@ -88,6 +121,14 @@ import Foundation
 
 enum RoomSecrets {
 ${FIELDS.map(([key]) => `  static let ${key} = ${q(tuya[key])}`).join('\n')}
+}
+
+enum RoomDevices {
+  static let bulbs: [(id: String, name: String, ip: String, group: String)] = [
+${bulbs.map((b) => `    (id: ${q(b.id)}, name: ${q(b.name)}, ip: ${q(b.ip)}, group: ${q(b.group)}),`).join('\n')}
+  ]
+
+  static let groupIDs = [${groups.map((g) => q(g.id)).join(', ')}]
 }
 `;
 }

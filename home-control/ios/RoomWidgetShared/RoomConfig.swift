@@ -91,14 +91,11 @@ enum RoomConfig {
   static let minBrightness = 10
   static let maxBrightness = 100
 
-  static let bulbs: [BulbConfig] = [
-    .init(id: "left-1", name: "Left Light 1", ip: "192.168.29.131", group: "left"),
-    .init(id: "left-2", name: "Left Light 2", ip: "192.168.29.180", group: "left"),
-    .init(id: "right-1", name: "Right Light 1", ip: "192.168.29.116", group: "right"),
-    .init(id: "right-2", name: "Right Light 2", ip: "192.168.29.151", group: "right"),
-  ]
+  static let bulbs: [BulbConfig] = RoomDevices.bulbs.map {
+    BulbConfig(id: $0.id, name: $0.name, ip: $0.ip, group: $0.group)
+  }
 
-  static let lightGroupIDs = ["left", "right"]
+  static let lightGroupIDs = RoomDevices.groupIDs
 
   /// `nil` means every bulb.
   static func bulbs(inGroup group: String?) -> [BulbConfig] {

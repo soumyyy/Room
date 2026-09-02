@@ -18,8 +18,8 @@
 		48619C9C91959A1DF16F83EC /* icon_512x512@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 11A8AADECF00EDE9F2E0B5C7 /* icon_512x512@2x.png */; };
 		5832F5A0E92C5F2567C7EF49 /* icon_32x32@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = D6778600BE2511DEF97C9831 /* icon_32x32@2x.png */; };
 		5BD1AAB983950B95C2DA6224 /* RoomConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADAD48B57323E4398C0C33AC /* RoomConfig.swift */; };
-		A1C0DE0000000000000000F2 /* RoomSecrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE0000000000000000F1 /* RoomSecrets.swift */; };
-		A1C0DE0000000000000000F3 /* RoomSecrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE0000000000000000F1 /* RoomSecrets.swift */; };
+		A1C0DE0000000000000000F2 /* RoomGenerated.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE0000000000000000F1 /* RoomGenerated.swift */; };
+		A1C0DE0000000000000000F3 /* RoomGenerated.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE0000000000000000F1 /* RoomGenerated.swift */; };
 		6DB0A868F5E1C0070DE2C0DA /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E131591549D1D95EF47DBD /* ContentView.swift */; };
 		ACBD6876BE867434994C5385 /* RoomIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D6960A784EFD92AFB31B5BA /* RoomIntents.swift */; };
 		AD2ADDD203D80324DB9DB7E9 /* icon_512x512.png in Resources */ = {isa = PBXBuildFile; fileRef = F869C7400426FEA9AB483BFB /* icon_512x512.png */; };
@@ -76,7 +76,7 @@
 		99E559254FFE394AC8ED76CE /* icon_32x32.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = icon_32x32.png; sourceTree = "<group>"; };
 		A1771FCF6E40E4F15F6F8D57 /* icon_16x16.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = icon_16x16.png; sourceTree = "<group>"; };
 		ADAD48B57323E4398C0C33AC /* RoomConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomConfig.swift; sourceTree = "<group>"; };
-		A1C0DE0000000000000000F1 /* RoomSecrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomSecrets.swift; sourceTree = "<group>"; };
+		A1C0DE0000000000000000F1 /* RoomGenerated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomGenerated.swift; sourceTree = "<group>"; };
 		BE3D6338463691ED597E889E /* RoomWidgetMacWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RoomWidgetMacWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D6778600BE2511DEF97C9831 /* icon_32x32@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon_32x32@2x.png"; sourceTree = "<group>"; };
 		DAAAB321E128113F3F0BDF35 /* icon_128x128@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon_128x128@2x.png"; sourceTree = "<group>"; };
@@ -90,7 +90,7 @@
 			isa = PBXGroup;
 			children = (
 				ADAD48B57323E4398C0C33AC /* RoomConfig.swift */,
-				A1C0DE0000000000000000F1 /* RoomSecrets.swift */,
+				A1C0DE0000000000000000F1 /* RoomGenerated.swift */,
 				8E2FD7EFF52EE51957654E6C /* RoomController.swift */,
 				8D6960A784EFD92AFB31B5BA /* RoomIntents.swift */,
 				1ACE62C350B84DA650620AB5 /* TuyaClient.swift */,
@@ -263,7 +263,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5BD1AAB983950B95C2DA6224 /* RoomConfig.swift in Sources */,
-				A1C0DE0000000000000000F2 /* RoomSecrets.swift in Sources */,
+				A1C0DE0000000000000000F2 /* RoomGenerated.swift in Sources */,
 				CBCC8F7E502C906EA018D90C /* RoomController.swift in Sources */,
 				1457799B504684B34844C35F /* RoomIntents.swift in Sources */,
 				ED8BB7E628F0297F364EBE75 /* RoomWidget.swift in Sources */,
@@ -278,7 +278,7 @@
 			files = (
 				6DB0A868F5E1C0070DE2C0DA /* ContentView.swift in Sources */,
 				F10BF685299469BE99720E42 /* RoomConfig.swift in Sources */,
-				A1C0DE0000000000000000F3 /* RoomSecrets.swift in Sources */,
+				A1C0DE0000000000000000F3 /* RoomGenerated.swift in Sources */,
 				FB677367F3F4E9D4AC36C076 /* RoomController.swift in Sources */,
 				ACBD6876BE867434994C5385 /* RoomIntents.swift in Sources */,
 				37EA59DF660B69F6E4F9232C /* RoomWidgetMacApp.swift in Sources */,

@@ -1,4 +1,8 @@
-import { TUYA_SECRETS } from './config.secrets';
+import {
+  BULBS_GENERATED,
+  BULB_GROUPS_GENERATED,
+  TUYA_SECRETS,
+} from './config.generated';
 
 export interface BulbConfig {
   id: string;
@@ -21,25 +25,9 @@ export interface TuyaCloudConfig {
 }
 
 // ── WiZ bulbs ──────────────────────────────────────────────────────────────
-export const BULBS: BulbConfig[] = [
-  { id: 'left-1', name: 'Left Light 1', ip: '192.168.29.131' },
-  { id: 'left-2', name: 'Left Light 2', ip: '192.168.29.180' },
-  { id: 'right-1', name: 'Right Light 1', ip: '192.168.29.116' },
-  { id: 'right-2', name: 'Right Light 2', ip: '192.168.29.151' },
-];
+export const BULBS: BulbConfig[] = BULBS_GENERATED;
 
-export const BULB_GROUPS: BulbGroupConfig[] = [
-  {
-    id: 'left',
-    name: 'Left Lights',
-    bulbIds: ['left-1', 'left-2'],
-  },
-  {
-    id: 'right',
-    name: 'Right Lights',
-    bulbIds: ['right-1', 'right-2'],
-  },
-];
+export const BULB_GROUPS: BulbGroupConfig[] = BULB_GROUPS_GENERATED;
 
 // ── Tuya cloud AC control on-device ────────────────────────────────────────
 export const TUYA_CLOUD: TuyaCloudConfig = {
