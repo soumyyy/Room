@@ -4,7 +4,7 @@
     "slug": "room",
     "version": "1.0.0",
     "icon": "./assets/Icon-1024.png",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
       "infoPlist": {
         "CFBundleIconName": "AppIcon",
@@ -12,7 +12,7 @@
           "NSAllowsLocalNetworking": true
         },
         "NSLocalNetworkUsageDescription": "Room uses your local network to control WiZ lights.",
-        "RCTNewArchEnabled": false,
+        "RCTNewArchEnabled": true,
         "UIUserInterfaceStyle": "Dark",
         "ITSAppUsesNonExemptEncryption": false
       },

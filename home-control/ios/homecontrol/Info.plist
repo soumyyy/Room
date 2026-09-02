@@ -49,7 +49,7 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Room uses your local network to control WiZ lights.</string>
 	<key>RCTNewArchEnabled</key>
-	<false/>
+	<true/>
 	<key>UILaunchStoryboardName</key>
 	<string>SplashScreen</string>
 	<key>UIRequiredDeviceCapabilities</key>

@@ -158,6 +158,24 @@ references a `RoomStateStore` that does not exist in that project, plus two type
 `TuyaClient`. Verified by building the pre-change state. Its secrets wiring is consistent with the others
 but could not be validated by a build.
 
+## Done — Expo SDK 55 (branch `expo-55`)
+
+Latest Expo is 57.0.19 (55.0.31 / 56.0.21 also stable). Went to 55 rather than straight to 57: SDK 55 is
+where the old architecture is *removed*, and `react-native-udp@4.1.7` — which every light runs through —
+was last published January 2023, has no `codegenConfig` and no new-arch hooks in its podspec. Taking that
+cliff on its own makes any breakage attributable.
+
+- [x] expo 54.0.33 → ^55.0.0, RN 0.81.5 → 0.83.10, React 19.1.0 → 19.2.0
+- [x] New Architecture enabled in `app.json`, `Podfile.properties.json` and `Info.plist`
+- [x] `AppDelegate.swift`: imports made `internal` to match Expo's generated `ExpoModulesProvider.swift`,
+      which forced the class to internal too; removed the stale `bindReactNativeFactory(factory)` call that
+      SDK 55 dropped
+- [x] Simulator and device SDKs build; 49/49 assertions pass; JS bundles (765 modules)
+
+**Unverified and the whole risk of this branch:** react-native-udp compiles and links under the new
+architecture, but whether UDP actually works through the TurboModule interop layer can only be shown by
+tapping a light on a device. If it does not, the fallback is staying on SDK 54 or replacing that module.
+
 ## Remaining — direction C (chosen)
 
 - [ ] `TuyaClient.fetchACStatus()` + a `getPilot` receive path in `WiZClient`
