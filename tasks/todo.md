@@ -192,9 +192,12 @@ cliff on its own makes any breakage attributable.
       SDK 55 dropped
 - [x] Simulator and device SDKs build; 49/49 assertions pass; JS bundles (765 modules)
 
-**Unverified and the whole risk of this branch:** react-native-udp compiles and links under the new
-architecture, but whether UDP actually works through the TurboModule interop layer can only be shown by
-tapping a light on a device. If it does not, the fallback is staying on SDK 54 or replacing that module.
+**RESOLVED on device (2026-09-03, iPhone 17): react-native-udp works through the TurboModule interop
+layer.** The lights respond on SDK 55 with the New Architecture enabled, which was the entire risk of this
+upgrade. Merged to main.
+
+SDK 56 and 57 exist and are mechanical from here, but are deliberately not being chased — the app is where
+it should be.
 
 ## Remaining — direction C (chosen)
 
@@ -236,8 +239,6 @@ key rotation and a signing proxy), 6–9, and the cleanup list.
 
 ## Open
 
-- [ ] `expo-55`: one tap on a light on device, to prove react-native-udp survives the New Architecture.
-      Nothing else gates catching up to SDK 57.
 - [ ] Two remaining bulb MACs, then four DHCP reservations. `npm run bulbs` reports and verifies.
 - [ ] `eas secret:create` for the five `ROOM_TUYA_*` vars before the next cloud build — without them the
       build succeeds and ships unconfigured.
