@@ -11,7 +11,8 @@
     "web": "node ./node_modules/expo/bin/cli start --web",
     "test": "./scripts/run-tests.sh",
     "typecheck": "tsc --noEmit",
-    "check:native": "node scripts/check-native.mjs"
+    "check:native": "node scripts/check-native.mjs",
+    "bulbs": "node scripts/find-bulbs.mjs"
   },
   "dependencies": {
     "buffer": "^6.0.3",

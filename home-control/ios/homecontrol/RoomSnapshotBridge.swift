@@ -11,6 +11,27 @@ import WidgetKit
 final class RoomSnapshotBridge: NSObject {
   @objc static func requiresMainQueueSetup() -> Bool { false }
 
+  /// Hands the app whatever the room was last known to be doing, so the first
+  /// frame can show real values instead of waiting on the network. Returns a
+  /// JSON string rather than a dictionary to keep one encoding of the snapshot.
+  @objc(read:reject:)
+  func read(
+    _ resolve: @escaping ([Any]?) -> Void,
+    reject: @escaping (String?, String?, Error?) -> Void
+  ) {
+    let snapshot = RoomSnapshotStore.load()
+
+    guard snapshot.updatedAt != nil,
+          let data = try? JSONEncoder().encode(snapshot),
+          let json = String(data: data, encoding: .utf8) else {
+      // Nothing has ever been recorded; say so rather than invent a room.
+      resolve([NSNull()])
+      return
+    }
+
+    resolve([json])
+  }
+
   @objc(recordAC:mode:temp:wind:)
   func recordAC(_ power: NSNumber, mode: NSNumber, temp: NSNumber, wind: NSNumber) {
     let scene = AcScene(
@@ -24,15 +45,19 @@ final class RoomSnapshotBridge: NSObject {
     reload()
   }
 
-  @objc(recordLights:isOn:brightness:presetId:)
-  func recordLights(
-    _ groups: NSArray,
-    isOn: Bool,
-    brightness: NSNumber?,
-    presetId: NSString?
-  ) {
-    let ids = groups.compactMap { $0 as? String }
+  /// Takes one dictionary rather than positional arguments: React Native
+  /// requires every NSNumber argument to be nonnull, and brightness is genuinely
+  /// absent on a plain on/off toggle. A nullable NSNumber logs an argument error
+  /// and coerces the missing value to zero, which would record a brightness the
+  /// user never set.
+  @objc(recordLights:)
+  func recordLights(_ payload: NSDictionary) {
+    let ids = (payload["groups"] as? [Any])?.compactMap { $0 as? String } ?? []
     guard !ids.isEmpty else { return }
+
+    let isOn = (payload["isOn"] as? NSNumber)?.boolValue ?? false
+    let brightness = payload["brightness"] as? NSNumber
+    let presetID = payload["presetId"] as? String
 
     RoomSnapshotStore.update { snapshot in
       for id in ids {
@@ -44,8 +69,8 @@ final class RoomSnapshotBridge: NSObject {
           state.brightness = RoomConfig.clampBrightness(brightness.intValue)
         }
 
-        if let presetId {
-          state.presetID = presetId as String
+        if let presetID {
+          state.presetID = presetID
         }
 
         snapshot.lights[id] = state

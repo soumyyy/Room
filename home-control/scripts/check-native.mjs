@@ -55,6 +55,14 @@ check(
 check('native bridge compiles into the app', count('RoomSnapshotBridge.m in Sources */,') === 1);
 check('RoomGenerated.swift compiles into both targets', count('RoomGenerated.swift in Sources */,') === 2);
 
+// React Native rejects nullable NSNumber bridge arguments and coerces the
+// missing value to zero, which is a silent data bug rather than a crash.
+const bridgeExports = readFileSync(join(ios, 'homecontrol/RoomSnapshotBridge.m'), 'utf8');
+check(
+  'no nullable NSNumber arguments in the bridge',
+  !/nullable\s+NSNumber/.test(bridgeExports),
+);
+
 if (failures.length) {
   console.error('\nnative wiring check FAILED:');
   for (const failure of failures) console.error(`  - ${failure}`);

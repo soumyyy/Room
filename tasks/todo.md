@@ -55,7 +55,7 @@ not a bare `Int`. Spoken values therefore need enums; the Shortcuts app can stil
 Verified from the built bundle: `Room.app` carries 10 autoShortcuts, 12 actions, 7 enums; the extension
 carries 0 shortcuts but all 12 actions, so widget buttons still run in-process. Both targets build.
 
-Still unverified: no Siri phrase has been spoken and no Tuya `ac/status` response has been parsed against
+Still unverified: no Siri phrase has been spoken, and no Tuya `ac/status` response has been parsed against
 the real remote — `LooseInt` and the field precedence are modelled on app/tuya.ts, not on a captured
 response.
 
@@ -158,6 +158,26 @@ references a `RoomStateStore` that does not exist in that project, plus two type
 `TuyaClient`. Verified by building the pre-change state. Its secrets wiring is consistent with the others
 but could not be validated by a build.
 
+## Done — AppScreen split + TypeScript tests
+
+- [x] `AppScreen.tsx` 1998 → 1041 lines. Pulled out `roomDomain.ts` (types, constants, pure functions),
+      `styles.ts` and `components/BrightnessSlider.tsx`.
+- [x] `roomDomain.ts` imports nothing from react-native — that is the point, and it is what makes the
+      screen's decisions testable at all.
+- [x] 15 TypeScript assertions via `node --test`, wired into `npm test`. They compile to CommonJS in a temp
+      dir because Node's ESM resolver will not follow the extensionless imports the app source uses;
+      contorting app imports for the tests would have been the wrong trade.
+- [x] Suite is now: tsc, 15 TS assertions, native wiring check, 49 Swift assertions.
+
+## Verified — widget matches direction C
+
+Checked the shipped `RoomWidget.swift` against the published Live Grid spec rather than assuming:
+small is header + two device tiles + an Enter/Leave row; medium is a 122pt scene column beside the two
+tiles; tiles carry name and glyph on top with the value below; scenes stay neutral so the only colour on
+the canvas is device state. Type sizes, radii and the 122pt column all match the prototype.
+
+One deliberate addition beyond the prototype: the prototype only drew on and off, while the shipped tile
+has a third state — an em dash when nothing has been recorded yet.
 ## Done — Expo SDK 55 (branch `expo-55`)
 
 Latest Expo is 57.0.19 (55.0.31 / 56.0.21 also stable). Went to 55 rather than straight to 57: SDK 55 is
@@ -200,8 +220,27 @@ I could not confirm the firmware honours those keys. If Seafoam/Lavender/Blush c
 one edit — drop `c`/`w` and restore the plain `r`/`g`/`b` triples. Worst case is three presets that were
 unreachable before looking wrong.
 
-Not verified: nothing has been run on a device or simulator Home Screen. Widget rendering, whether the
+CONFIRMED ON DEVICE (2026-09-03, iPhone 17): the widget renders and its tiles show live state; the lights
+respond, so the widget's local-network fix works; the App Group is live in both directions; and cold start
+is visibly faster since the splash stopped waiting on the network.
+
+Two bugs that only hardware found, both now fixed: WidgetKit's own content margins shrank the layout and
+truncated "Lights", and `recordLights` declared a nullable NSNumber, which React Native rejects — null is
+what a plain on/off toggle sends, so it would have written a brightness of 10 that nobody chose.
+
+Superseded, kept for the record: nothing has been run on a device or simulator Home Screen. Widget rendering, whether the
 intents actually fire, and whether fix 2 truly unblocks the UDP sends are all unconfirmed until installed.
 
 Left undone deliberately: audit findings 1 (Tuya client secret committed and shipped in the IPA — needs a
 key rotation and a signing proxy), 6–9, and the cleanup list.
+
+## Open
+
+- [ ] `expo-55`: one tap on a light on device, to prove react-native-udp survives the New Architecture.
+      Nothing else gates catching up to SDK 57.
+- [ ] Two remaining bulb MACs, then four DHCP reservations. `npm run bulbs` reports and verifies.
+- [ ] `eas secret:create` for the five `ROOM_TUYA_*` vars before the next cloud build — without them the
+      build succeeds and ships unconfigured.
+- [ ] CI: 71 assertions and a native-wiring guard exist, and nothing runs them on push.
+- [ ] Desktop and phone disagree on light presets (21 vs 15, different names).
+- [ ] A Siri phrase, and whether Seafoam/Lavender/Blush read as pastel rather than oversaturated.
