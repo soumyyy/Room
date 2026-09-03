@@ -55,7 +55,7 @@ not a bare `Int`. Spoken values therefore need enums; the Shortcuts app can stil
 Verified from the built bundle: `Room.app` carries 10 autoShortcuts, 12 actions, 7 enums; the extension
 carries 0 shortcuts but all 12 actions, so widget buttons still run in-process. Both targets build.
 
-Still unverified: no Siri phrase has been spoken and no Tuya `ac/status` response has been parsed against
+Still unverified: no Siri phrase has been spoken, and no Tuya `ac/status` response has been parsed against
 the real remote — `LooseInt` and the field precedence are modelled on app/tuya.ts, not on a captured
 response.
 
@@ -203,8 +203,27 @@ I could not confirm the firmware honours those keys. If Seafoam/Lavender/Blush c
 one edit — drop `c`/`w` and restore the plain `r`/`g`/`b` triples. Worst case is three presets that were
 unreachable before looking wrong.
 
-Not verified: nothing has been run on a device or simulator Home Screen. Widget rendering, whether the
+CONFIRMED ON DEVICE (2026-09-03, iPhone 17): the widget renders and its tiles show live state; the lights
+respond, so the widget's local-network fix works; the App Group is live in both directions; and cold start
+is visibly faster since the splash stopped waiting on the network.
+
+Two bugs that only hardware found, both now fixed: WidgetKit's own content margins shrank the layout and
+truncated "Lights", and `recordLights` declared a nullable NSNumber, which React Native rejects — null is
+what a plain on/off toggle sends, so it would have written a brightness of 10 that nobody chose.
+
+Superseded, kept for the record: nothing has been run on a device or simulator Home Screen. Widget rendering, whether the
 intents actually fire, and whether fix 2 truly unblocks the UDP sends are all unconfirmed until installed.
 
 Left undone deliberately: audit findings 1 (Tuya client secret committed and shipped in the IPA — needs a
 key rotation and a signing proxy), 6–9, and the cleanup list.
+
+## Open
+
+- [ ] `expo-55`: one tap on a light on device, to prove react-native-udp survives the New Architecture.
+      Nothing else gates catching up to SDK 57.
+- [ ] Two remaining bulb MACs, then four DHCP reservations. `npm run bulbs` reports and verifies.
+- [ ] `eas secret:create` for the five `ROOM_TUYA_*` vars before the next cloud build — without them the
+      build succeeds and ships unconfigured.
+- [ ] CI: 71 assertions and a native-wiring guard exist, and nothing runs them on push.
+- [ ] Desktop and phone disagree on light presets (21 vs 15, different names).
+- [ ] A Siri phrase, and whether Seafoam/Lavender/Blush read as pastel rather than oversaturated.
