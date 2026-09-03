@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 
 import BrightnessSlider from './components/BrightnessSlider';
+import ColorSheet from './components/ColorSheet';
 import { BULB_GROUPS, BULBS, type BulbConfig, type BulbGroupConfig } from './config';
 import {
   ALL_LIGHTS_GROUP,
@@ -363,6 +364,62 @@ export default function AppScreen() {
       : DEFAULT_BULB_BRIGHTNESS;
     setSheetBrightness(avg);
     setColorSheetGroupId(groupId);
+  }
+
+  const sheetGroup =
+    colorSheetGroupId === ALL_LIGHTS_GROUP.id
+      ? ALL_LIGHTS_GROUP
+      : BULB_GROUPS.find((group) => group.id === colorSheetGroupId) ?? null;
+  const sheetGroupBusy = sheetGroup
+    ? bulbsForGroup(sheetGroup, bulbs).some((bulb) => bulb.busy)
+    : false;
+  // With 'all' open, only highlight a chip when every group agrees.
+  const sheetColorIds = sheetGroup
+    ? groupIdsFor(sheetGroup).map((id) => selectedGroupColor[id] ?? 'warm-white')
+    : [];
+  const sheetActiveColorId =
+    sheetColorIds.length > 0 && sheetColorIds.every((id) => id === sheetColorIds[0])
+      ? sheetColorIds[0]
+      : null;
+
+  async function applySheetPreset(preset: GroupColorPreset) {
+    if (!sheetGroup) {
+      return;
+    }
+
+    const ok = await runGroupCommand(
+      sheetGroup,
+      (bulb) => ({ ...bulb, isOn: true }),
+      { dimming: clampBrightness(sheetBrightness), ...preset.params },
+      { presetId: preset.id },
+    );
+
+    if (ok) {
+      setSelectedGroupColor((current) => ({
+        ...current,
+        ...Object.fromEntries(groupIdsFor(sheetGroup).map((id) => [id, preset.id])),
+      }));
+    }
+  }
+
+  async function applySheetBrightness(nextValue: number) {
+    if (!sheetGroup) {
+      return;
+    }
+
+    const brightness = clampBrightness(nextValue);
+    const previous = sheetBrightness;
+    setSheetBrightness(brightness);
+
+    const ok = await runGroupCommand(
+      sheetGroup,
+      (bulb) => ({ ...bulb, isOn: true, brightness }),
+      { state: true, dimming: brightness },
+    );
+
+    if (!ok) {
+      setSheetBrightness(previous);
+    }
   }
 
   async function leaveRoom() {
@@ -867,161 +924,16 @@ export default function AppScreen() {
 
       </ScrollView>
 
-      {/* ── Colour sheet ──────────────────────────────────────────────── */}
-      {(() => {
-        const sheetGroup =
-          colorSheetGroupId === ALL_LIGHTS_GROUP.id
-            ? ALL_LIGHTS_GROUP
-            : BULB_GROUPS.find((g) => g.id === colorSheetGroupId) ?? null;
-        if (!sheetGroup) return null;
-
-        const sheetMembers = bulbsForGroup(sheetGroup, bulbs);
-        const sheetGroupBusy = sheetMembers.some((b) => b.busy);
-        // With 'all' open, only highlight a chip when every group agrees.
-        const sheetColorIds = groupIdsFor(sheetGroup).map(
-          (id) => selectedGroupColor[id] ?? 'warm-white',
-        );
-        const sheetActiveColorId = sheetColorIds.every((id) => id === sheetColorIds[0])
-          ? sheetColorIds[0]
-          : null;
-
-        async function applyPreset(preset: GroupColorPreset) {
-          const ok = await runGroupCommand(
-            sheetGroup!,
-            (b) => ({ ...b, isOn: true }),
-            { dimming: clampBrightness(sheetBrightness), ...preset.params },
-            { presetId: preset.id },
-          );
-          if (ok) {
-            setSelectedGroupColor((current) => ({
-              ...current,
-              ...Object.fromEntries(groupIdsFor(sheetGroup!).map((id) => [id, preset.id])),
-            }));
-          }
-        }
-
-        async function applyBrightness(nextValue: number) {
-          const brightness = clampBrightness(nextValue);
-          const previousBrightness = sheetBrightness;
-          setSheetBrightness(brightness);
-
-          const ok = await runGroupCommand(
-            sheetGroup!,
-            (b) => ({ ...b, isOn: true, brightness }),
-            { state: true, dimming: brightness },
-          );
-
-          if (!ok) {
-            setSheetBrightness(previousBrightness);
-          }
-        }
-
-        return (
-          <Modal
-            visible={colorSheetGroupId !== null}
-            transparent
-            animationType="slide"
-            onRequestClose={() => setColorSheetGroupId(null)}
-          >
-            <Pressable
-              style={styles.sheetOverlay}
-              onPress={() => setColorSheetGroupId(null)}
-            />
-            <View style={styles.sheet}>
-              <View style={styles.sheetHandle} />
-
-              <View style={styles.sheetHeader}>
-                <Text style={styles.sheetTitle}>{sheetGroup.name}</Text>
-                <Pressable
-                  onPress={() => setColorSheetGroupId(null)}
-                  style={styles.sheetClose}
-                  hitSlop={12}
-                >
-                  <Text style={styles.sheetCloseText}>Done</Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.sheetSection}>
-                <View style={styles.sheetSectionHeader}>
-                  <Text style={styles.sheetSectionLabel}>Brightness</Text>
-                  <Text style={styles.sheetBrightnessValue}>{sheetBrightness}%</Text>
-                </View>
-                <BrightnessSlider
-                  value={sheetBrightness}
-                  disabled={sheetGroupBusy}
-                  onPreview={setSheetBrightness}
-                  onCommit={(value) => void applyBrightness(value)}
-                />
-              </View>
-
-              <View style={styles.sheetSection}>
-                <View style={styles.colorChipRow}>
-                  {WHITE_PRESETS.map((preset) => (
-                    <Pressable
-                      key={preset.id}
-                      onPress={() => void applyPreset(preset)}
-                      style={({ pressed }) => [
-                        styles.colorChip,
-                        sheetActiveColorId === preset.id ? styles.colorChipActive : null,
-                        pressed ? styles.pressed : null,
-                        sheetGroupBusy ? styles.disabled : null,
-                      ]}
-                      disabled={sheetGroupBusy}
-                    >
-                      <View style={[styles.colorChipDot, { backgroundColor: preset.hex }]} />
-                      <Text
-                        style={[
-                          styles.colorChipLabel,
-                          sheetActiveColorId === preset.id ? styles.colorChipLabelActive : null,
-                        ]}
-                      >
-                        {preset.name}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-
-              <View style={styles.sheetSection}>
-                <View style={styles.colorPaletteStack}>
-                  {COLOR_ROWS.map((row) => (
-                    <View key={row[0].id} style={styles.colorPaletteRow}>
-                      {row.map((preset) => (
-                        <Pressable
-                          key={preset.id}
-                          onPress={() => void applyPreset(preset)}
-                          style={({ pressed }) => [
-                            styles.colorPaletteTile,
-                            { backgroundColor: preset.hex },
-                            sheetActiveColorId === preset.id
-                              ? styles.colorPaletteTileActive
-                              : null,
-                            pressed ? styles.pressed : null,
-                            sheetGroupBusy ? styles.disabled : null,
-                          ]}
-                          disabled={sheetGroupBusy}
-                        >
-                          <View
-                            style={[
-                              styles.colorPaletteTileInner,
-                              sheetActiveColorId === preset.id
-                                ? styles.colorPaletteTileInnerActive
-                                : null,
-                            ]}
-                          />
-                        </Pressable>
-                      ))}
-                      {Array.from({ length: COLOR_ROW_SIZE - row.length }, (_, index) => (
-                        <View key={`pad-${index}`} style={styles.colorPaletteTilePad} />
-                      ))}
-                    </View>
-                  ))}
-                </View>
-              </View>
-            </View>
-          </Modal>
-        );
-      })()}
+      <ColorSheet
+        group={sheetGroup}
+        busy={sheetGroupBusy}
+        activeColorId={sheetActiveColorId}
+        brightness={sheetBrightness}
+        onBrightnessPreview={setSheetBrightness}
+        onApplyBrightness={applySheetBrightness}
+        onApplyPreset={applySheetPreset}
+        onClose={() => setColorSheetGroupId(null)}
+      />
 
       {/* ── Splash ────────────────────────────────────────────────────── */}
       {showSplash ? (
