@@ -2,7 +2,7 @@
   "expo": {
     "name": "Room",
     "slug": "room",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "icon": "./assets/Icon-1024.png",
     "newArchEnabled": true,
     "ios": {
@@ -17,7 +17,7 @@
         "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "org.name.homecontrol",
-      "runtimeVersion": "1.0.0"
+      "runtimeVersion": "1.1.0"
     },
     "extra": {
       "eas": {
