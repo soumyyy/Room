@@ -158,6 +158,27 @@ references a `RoomStateStore` that does not exist in that project, plus two type
 `TuyaClient`. Verified by building the pre-change state. Its secrets wiring is consistent with the others
 but could not be validated by a build.
 
+## Done — AppScreen split + TypeScript tests
+
+- [x] `AppScreen.tsx` 1998 → 1041 lines. Pulled out `roomDomain.ts` (types, constants, pure functions),
+      `styles.ts` and `components/BrightnessSlider.tsx`.
+- [x] `roomDomain.ts` imports nothing from react-native — that is the point, and it is what makes the
+      screen's decisions testable at all.
+- [x] 15 TypeScript assertions via `node --test`, wired into `npm test`. They compile to CommonJS in a temp
+      dir because Node's ESM resolver will not follow the extensionless imports the app source uses;
+      contorting app imports for the tests would have been the wrong trade.
+- [x] Suite is now: tsc, 15 TS assertions, native wiring check, 49 Swift assertions.
+
+## Verified — widget matches direction C
+
+Checked the shipped `RoomWidget.swift` against the published Live Grid spec rather than assuming:
+small is header + two device tiles + an Enter/Leave row; medium is a 122pt scene column beside the two
+tiles; tiles carry name and glyph on top with the value below; scenes stay neutral so the only colour on
+the canvas is device state. Type sizes, radii and the 122pt column all match the prototype.
+
+One deliberate addition beyond the prototype: the prototype only drew on and off, while the shipped tile
+has a third state — an em dash when nothing has been recorded yet.
+
 ## Remaining — direction C (chosen)
 
 - [ ] `TuyaClient.fetchACStatus()` + a `getPilot` receive path in `WiZClient`
