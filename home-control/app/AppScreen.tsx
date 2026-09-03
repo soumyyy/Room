@@ -27,9 +27,11 @@ import {
   PRESETS,
   WHITE_PRESETS,
   bulbsForGroup,
+  bulbsFromSnapshot,
   clampBrightness,
   clampTemp,
   createBulbState,
+  colorsFromSnapshot,
   createPreviewStatuses,
   groupIdsFor,
   isTuyaConfigured,
@@ -37,12 +39,13 @@ import {
   modeLabel,
   normalizeStatus,
   sceneEquals,
+  sceneFromSnapshot,
   sceneToPayload,
   type AcScene,
   type BulbState,
   type GroupColorPreset,
 } from './roomDomain';
-import { recordAcScene, recordLightCommand } from './roomSnapshot';
+import { readRoomSnapshot, recordAcScene, recordLightCommand } from './roomSnapshot';
 import { getAcStatus, sendAcScene } from './tuya';
 import { getWizStatuses, isUsingDirectWiz, sendWizCommand, type WizPilotStatus } from './wizClient';
 import { styles } from './styles';
@@ -466,12 +469,35 @@ export default function AppScreen() {
   useEffect(() => {
     let disposed = false;
 
+    // The splash used to wait on Promise.allSettled of the Tuya call, the WiZ
+    // call and a hard 1100ms floor, so a cold start cost the slowest of them.
+    // A sleeping bulb alone pinned it at the full 1200ms WiZ timeout, and a
+    // cold Tuya token means two sequential round trips before anything renders.
+    //
+    // The room's last known state is already in the App Group, so show that
+    // immediately and let the network correct it in place. Only a device we
+    // have never observed still waits, because inventing a temperature would
+    // be worse than a moment of splash.
     async function boot() {
-      await Promise.allSettled([
-        loadStatus({ showLoader: true }),
-        loadBulbStatus(),
-        new Promise((resolve) => setTimeout(resolve, 1100)),
-      ]);
+      const snapshot = await readRoomSnapshot();
+
+      if (disposed) {
+        return;
+      }
+
+      const storedScene = sceneFromSnapshot(snapshot);
+
+      if (storedScene) {
+        setAc(storedScene);
+        setBulbs((current) => bulbsFromSnapshot(current, snapshot));
+        setSelectedGroupColor((current) => colorsFromSnapshot(current, snapshot));
+        setLoadingStatus(false);
+        void loadStatus({ showLoader: false });
+      } else {
+        await loadStatus({ showLoader: true });
+      }
+
+      void loadBulbStatus();
 
       if (disposed) {
         return;

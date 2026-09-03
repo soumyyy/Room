@@ -2,7 +2,17 @@ import { NativeModules } from 'react-native';
 
 import { BULB_GROUPS } from './config';
 
+export type StoredRoomSnapshot = {
+  ac?: { power: number; mode: number; temp: number; wind: number } | null;
+  lights?: Record<
+    string,
+    { isOn: boolean; brightness?: number | null; presetID?: string | null }
+  >;
+  updatedAt?: string | null;
+};
+
 type RoomSnapshotBridge = {
+  read(): Promise<string | null>;
   recordAC(power: number, mode: number, temp: number, wind: number): void;
   recordLights(
     groups: string[],
@@ -25,6 +35,24 @@ function available() {
 
 export function isSnapshotBridgeAvailable() {
   return available();
+}
+
+/**
+ * Whatever the room was last known to be doing, or null when nothing has been
+ * recorded. Reading this is a local lookup, so the first frame can show real
+ * values rather than waiting on the network.
+ */
+export async function readRoomSnapshot(): Promise<StoredRoomSnapshot | null> {
+  if (typeof bridge?.read !== 'function') {
+    return null;
+  }
+
+  try {
+    const json = await bridge.read();
+    return json ? (JSON.parse(json) as StoredRoomSnapshot) : null;
+  } catch {
+    return null;
+  }
 }
 
 export function recordAcScene(scene: {

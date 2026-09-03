@@ -2,6 +2,9 @@
 
 @interface RCT_EXTERN_MODULE (RoomSnapshotBridge, NSObject)
 
+RCT_EXTERN_METHOD(read:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
 RCT_EXTERN_METHOD(recordAC:(nonnull NSNumber *)power
                   mode:(nonnull NSNumber *)mode
                   temp:(nonnull NSNumber *)temp

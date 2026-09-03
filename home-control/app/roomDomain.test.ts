@@ -6,6 +6,9 @@ import { test } from 'node:test';
 
 import {
   ALL_LIGHTS_GROUP,
+  bulbsFromSnapshot,
+  colorsFromSnapshot,
+  sceneFromSnapshot,
   COLOR_ROWS,
   COLOR_ROW_SIZE,
   GROUP_COLOR_PRESETS,
@@ -122,4 +125,61 @@ test('mode and fan labels cover every option', () => {
 
 test('Tuya reports itself configured only with real values', () => {
   assert.equal(typeof isTuyaConfigured(), 'boolean');
+});
+
+test('hydration: nothing recorded yields no scene', () => {
+  assert.equal(sceneFromSnapshot(null), null);
+  assert.equal(sceneFromSnapshot({}), null);
+  assert.equal(sceneFromSnapshot({ ac: null }), null);
+});
+
+test('hydration: a stale snapshot cannot widen the accepted range', () => {
+  const scene = sceneFromSnapshot({ ac: { power: 1, mode: 99, temp: 88, wind: 42 } });
+  assert.deepEqual(scene, { power: 1, mode: 0, temp: 30, wind: 1 });
+});
+
+test('hydration: a recorded scene comes back intact', () => {
+  assert.deepEqual(sceneFromSnapshot({ ac: { power: 1, mode: 2, temp: 22, wind: 3 } }), {
+    power: 1,
+    mode: 2,
+    temp: 22,
+    wind: 3,
+  });
+});
+
+test('hydration: stored light state reaches the right bulbs', () => {
+  const start = BULBS.map(createBulbState);
+  const hydrated = bulbsFromSnapshot(start, {
+    lights: { left: { isOn: true, brightness: 70 }, right: { isOn: false } },
+  });
+
+  const left = hydrated.filter((bulb) => BULB_GROUPS[0].bulbIds.includes(bulb.id));
+  const right = hydrated.filter((bulb) => BULB_GROUPS[1].bulbIds.includes(bulb.id));
+  assert.ok(left.every((bulb) => bulb.isOn && bulb.brightness === 70));
+  assert.ok(right.every((bulb) => !bulb.isOn));
+});
+
+test('hydration: never claims a bulb is reachable', () => {
+  const hydrated = bulbsFromSnapshot(BULBS.map(createBulbState), {
+    lights: { left: { isOn: true, brightness: 70 } },
+  });
+  assert.ok(
+    hydrated.every((bulb) => bulb.available === null),
+    'a snapshot says what a bulb was doing, never that it answers now',
+  );
+});
+
+test('hydration: a missing brightness keeps what we had', () => {
+  const start = BULBS.map(createBulbState).map((bulb) => ({ ...bulb, brightness: 55 }));
+  const hydrated = bulbsFromSnapshot(start, { lights: { left: { isOn: true } } });
+  assert.ok(hydrated.every((bulb) => bulb.brightness === 55));
+});
+
+test('hydration: colours restore per group, defaults survive', () => {
+  const colors = colorsFromSnapshot(
+    { left: 'warm-white', right: 'warm-white' },
+    { lights: { left: { isOn: true, presetID: 'seafoam' }, right: { isOn: false } } },
+  );
+  assert.equal(colors.left, 'seafoam');
+  assert.equal(colors.right, 'warm-white');
 });

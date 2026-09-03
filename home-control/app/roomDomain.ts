@@ -339,3 +339,82 @@ export function createPreviewStatuses(bulbs: BulbState[]): WizPilotStatus[] {
     temp: null,
   }));
 }
+
+// ── Rehydrating from the shared snapshot ────────────────────────────────────
+
+type StoredSnapshot = {
+  ac?: { power: number; mode: number; temp: number; wind: number } | null;
+  lights?: Record<
+    string,
+    { isOn: boolean; brightness?: number | null; presetID?: string | null }
+  >;
+};
+
+/** Clamps a stored scene back into range; a stale file should never widen it. */
+export function sceneFromSnapshot(snapshot: StoredSnapshot | null): AcScene | null {
+  const stored = snapshot?.ac;
+  if (!stored) {
+    return null;
+  }
+
+  return {
+    power: stored.power === 1 ? 1 : 0,
+    mode: clampMode(Number(stored.mode)),
+    temp: clampTemp(Number(stored.temp)),
+    wind: clampWind(Number(stored.wind)),
+  };
+}
+
+/**
+ * Applies stored per-group light state to the bulbs. `available` stays null:
+ * the snapshot says what a bulb was doing, never that it is reachable now, and
+ * claiming otherwise would let the UI enable controls we cannot honour.
+ */
+export function bulbsFromSnapshot(
+  bulbs: BulbState[],
+  snapshot: StoredSnapshot | null,
+): BulbState[] {
+  const lights = snapshot?.lights;
+  if (!lights) {
+    return bulbs;
+  }
+
+  return bulbs.map((bulb) => {
+    const stored = lights[groupOf(bulb) ?? ''];
+    if (!stored) {
+      return bulb;
+    }
+
+    return {
+      ...bulb,
+      isOn: stored.isOn,
+      brightness:
+        typeof stored.brightness === 'number'
+          ? clampBrightness(stored.brightness)
+          : bulb.brightness,
+    };
+  });
+}
+
+function groupOf(bulb: BulbConfig): string | null {
+  return BULB_GROUPS.find((group) => group.bulbIds.includes(bulb.id))?.id ?? null;
+}
+
+/** Per-group colour selection, keeping the default where nothing was stored. */
+export function colorsFromSnapshot(
+  current: Record<string, string>,
+  snapshot: StoredSnapshot | null,
+): Record<string, string> {
+  const lights = snapshot?.lights;
+  if (!lights) {
+    return current;
+  }
+
+  const next = { ...current };
+  for (const [groupId, stored] of Object.entries(lights)) {
+    if (stored.presetID) {
+      next[groupId] = stored.presetID;
+    }
+  }
+  return next;
+}
