@@ -45,15 +45,19 @@ final class RoomSnapshotBridge: NSObject {
     reload()
   }
 
-  @objc(recordLights:isOn:brightness:presetId:)
-  func recordLights(
-    _ groups: NSArray,
-    isOn: Bool,
-    brightness: NSNumber?,
-    presetId: NSString?
-  ) {
-    let ids = groups.compactMap { $0 as? String }
+  /// Takes one dictionary rather than positional arguments: React Native
+  /// requires every NSNumber argument to be nonnull, and brightness is genuinely
+  /// absent on a plain on/off toggle. A nullable NSNumber logs an argument error
+  /// and coerces the missing value to zero, which would record a brightness the
+  /// user never set.
+  @objc(recordLights:)
+  func recordLights(_ payload: NSDictionary) {
+    let ids = (payload["groups"] as? [Any])?.compactMap { $0 as? String } ?? []
     guard !ids.isEmpty else { return }
+
+    let isOn = (payload["isOn"] as? NSNumber)?.boolValue ?? false
+    let brightness = payload["brightness"] as? NSNumber
+    let presetID = payload["presetId"] as? String
 
     RoomSnapshotStore.update { snapshot in
       for id in ids {
@@ -65,8 +69,8 @@ final class RoomSnapshotBridge: NSObject {
           state.brightness = RoomConfig.clampBrightness(brightness.intValue)
         }
 
-        if let presetId {
-          state.presetID = presetId as String
+        if let presetID {
+          state.presetID = presetID
         }
 
         snapshot.lights[id] = state

@@ -14,12 +14,12 @@ export type StoredRoomSnapshot = {
 type RoomSnapshotBridge = {
   read(): Promise<string | null>;
   recordAC(power: number, mode: number, temp: number, wind: number): void;
-  recordLights(
-    groups: string[],
-    isOn: boolean,
-    brightness: number | null,
-    presetId: string | null,
-  ): void;
+  recordLights(payload: {
+    groups: string[];
+    isOn: boolean;
+    brightness?: number;
+    presetId?: string;
+  }): void;
 };
 
 const bridge = (NativeModules as Record<string, unknown>).RoomSnapshotBridge as
@@ -89,7 +89,14 @@ export function recordLightCommand(
   const brightness = typeof params.dimming === 'number' ? params.dimming : null;
 
   try {
-    bridge!.recordLights(groups, params.state === true, brightness, presetId ?? null);
+    // Omit absent values rather than sending null: React Native rejects a
+    // nullable NSNumber argument and would coerce it to zero.
+    bridge!.recordLights({
+      groups,
+      isOn: params.state === true,
+      ...(brightness === null ? {} : { brightness }),
+      ...(presetId ? { presetId } : {}),
+    });
   } catch {
     // Widget state is best-effort.
   }
