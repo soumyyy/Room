@@ -42,6 +42,36 @@ eas secret:create --name ROOM_TUYA_INFRARED_ID   --value ...
 eas secret:create --name ROOM_TUYA_AC_REMOTE_ID  --value ...
 ```
 
+## Bulb addressing
+
+`devices.json` holds each bulb's IP, and those addresses are static — nothing
+discovers them at runtime. If DHCP moves one, the app shows "Lights unavailable"
+and recovering means editing `devices.json` *and rebuilding*, because the values
+are compiled into the JS bundle and the widget binary.
+
+**Reserve the four addresses on the router.** That makes the static config
+correct permanently and costs nothing at runtime. In the router's admin page,
+find DHCP / address reservation and bind each MAC to the address below.
+
+| Bulb | Address to reserve | MAC |
+| --- | --- | --- |
+| `left-1`  | 192.168.29.131 | `98:77:D5:AF:66:DE` |
+| `left-2`  | 192.168.29.180 | `98:77:D5:0D:46:32` |
+| `right-1` | 192.168.29.116 | run `npm run bulbs` with the right lights powered |
+| `right-2` | 192.168.29.151 | run `npm run bulbs` with the right lights powered |
+
+```sh
+npm run bulbs
+```
+
+It sweeps the subnet rather than trusting `devices.json`, so it finds a bulb
+whose address has already moved, prints every MAC, and exits non-zero if what
+answered does not match what is configured. Run it after making the reservations
+to confirm they took.
+
+A bulb only answers when it has power at the wall switch — silence there means
+the switch is off, not that the bulb is broken.
+
 ## Do not run `expo prebuild`
 
 `ios/` is a committed bare-workflow project. The widget target, both App Group
