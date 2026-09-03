@@ -203,7 +203,8 @@ struct RoomWidgetView: View {
           .font(.system(size: isSmall ? 10.5 : 11, weight: .semibold))
           .foregroundStyle(reading.isOn ? style.label.opacity(0.82) : Color.white.opacity(0.52))
           .lineLimit(1)
-          .minimumScaleFactor(0.8)
+          .minimumScaleFactor(0.7)
+          .layoutPriority(1)
 
         Spacer(minLength: 2)
 
@@ -281,6 +282,10 @@ struct RoomActionsWidget: Widget {
     .configurationDisplayName("Room")
     .description("Live AC and light state, with arrive and leave scenes.")
     .supportedFamilies([.systemSmall, .systemMedium])
+    // WidgetKit adds its own content margins on top of whatever the view sets.
+    // Those cost roughly 16pt a side, which shrank the medium tiles enough to
+    // truncate "Lights". The layout sets its own padding, so turn them off.
+    .contentMarginsDisabled()
   }
 }
 
