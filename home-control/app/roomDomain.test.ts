@@ -42,7 +42,7 @@ test('AC status: temperature wins over temp, fan over wind', () => {
 test('AC status: nonsense falls back rather than propagating', () => {
   const scene = normalizeStatus({ mode: 99, temp: 'warm', fan: 42 });
   assert.equal(scene.mode, 0);
-  assert.equal(scene.temp, 24);
+  assert.equal(scene.temp, 27);
   assert.equal(scene.wind, 1);
 });
 

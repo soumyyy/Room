@@ -15,7 +15,7 @@ const FAN_OPTIONS = [
 const DEFAULT_BULB_BRIGHTNESS = 68;
 
 const state = {
-  ac: { power: 0, mode: 0, temp: 24, wind: 1 },
+  ac: { power: 0, mode: 0, temp: 27, wind: 1 },
   bulbs: [],
   groups: [],
   acPresets: [],

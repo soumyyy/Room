@@ -223,7 +223,7 @@ actor TuyaClient {
     return AcScene(
       power: power ? 1 : 0,
       mode: status.mode ?? 0,
-      temp: status.temperature ?? status.temp ?? 24,
+      temp: status.temperature ?? status.temp ?? 27,
       wind: status.fan ?? status.wind ?? 1
     )
   }

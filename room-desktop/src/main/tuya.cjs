@@ -163,7 +163,7 @@ function normalizeAcStatus(status) {
     mode: Number.isFinite(Number(status.mode)) ? Number(status.mode) : 0,
     temp: Number.isFinite(Number(status.temperature ?? status.temp))
       ? Number(status.temperature ?? status.temp)
-      : 24,
+      : 27,
     wind: Number.isFinite(Number(status.fan ?? status.wind)) ? Number(status.fan ?? status.wind) : 1,
   };
 }

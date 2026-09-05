@@ -50,7 +50,7 @@ export type GroupColorPreset = {
 export const INITIAL_SCENE: AcScene = {
   power: 0,
   mode: 0,
-  temp: 24,
+  temp: 27,
   wind: 1,
 };
 

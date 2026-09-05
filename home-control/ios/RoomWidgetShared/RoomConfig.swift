@@ -117,10 +117,10 @@ enum RoomConfig {
     acRemoteID: RoomSecrets.acRemoteId
   )
 
-  static let enterScene = AcScene(power: 1, mode: 0, temp: 24, wind: 1)
-  static let leaveScene = AcScene(power: 0, mode: 0, temp: 24, wind: 1)
-  static let acOnScene = AcScene(power: 1, mode: 0, temp: 24, wind: 1)
-  static let acOffScene = AcScene(power: 0, mode: 0, temp: 24, wind: 1)
+  static let enterScene = AcScene(power: 1, mode: 0, temp: 27, wind: 1)
+  static let leaveScene = AcScene(power: 0, mode: 0, temp: 27, wind: 1)
+  static let acOnScene = AcScene(power: 1, mode: 0, temp: 27, wind: 1)
+  static let acOffScene = AcScene(power: 0, mode: 0, temp: 27, wind: 1)
 
   static let enterLights = WizPilot(state: true, dimming: 100, temp: 4200)
   static let leaveLights = WizPilot(state: false)
