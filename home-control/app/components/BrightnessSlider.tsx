@@ -43,8 +43,26 @@ export default function BrightnessSlider({
     }
   }
 
+  function adjust(direction: -1 | 1) {
+    if (!disabled) {
+      const next = clampBrightness(value + direction * 5);
+      onPreview(next);
+      onCommit(next);
+    }
+  }
+
   return (
     <View
+      accessible
+      accessibilityRole="adjustable"
+      accessibilityLabel="Brightness"
+      accessibilityState={{ disabled }}
+      accessibilityValue={{ min: 10, max: 100, now: clampBrightness(value), text: `${value}%` }}
+      accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === 'increment') adjust(1);
+        if (event.nativeEvent.actionName === 'decrement') adjust(-1);
+      }}
       style={[styles.brightnessSlider, disabled ? styles.disabled : null]}
       onLayout={handleLayout}
       onStartShouldSetResponder={() => !disabled}

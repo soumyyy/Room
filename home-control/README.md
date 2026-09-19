@@ -64,8 +64,8 @@ find DHCP / address reservation and bind each MAC to the address below.
 | --- | --- | --- |
 | `left-1`  | 192.168.29.131 | `98:77:D5:AF:66:DE` |
 | `left-2`  | 192.168.29.180 | `98:77:D5:0D:46:32` |
-| `right-1` | 192.168.29.116 | run `npm run bulbs` with the right lights powered |
-| `right-2` | 192.168.29.151 | run `npm run bulbs` with the right lights powered |
+| `right-1` | 192.168.29.116 | `CC:40:85:AE:12:3A` |
+| `right-2` | 192.168.29.151 | `CC:40:85:5D:CF:32` |
 
 ```sh
 npm run bulbs

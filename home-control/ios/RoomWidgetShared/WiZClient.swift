@@ -1,5 +1,6 @@
 import Foundation
 import Network
+@preconcurrency import Dispatch
 
 /// One-shot guard so a connection's several callbacks can only resume the
 /// continuation once, no matter which queue they arrive on.

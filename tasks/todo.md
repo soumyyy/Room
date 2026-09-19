@@ -239,7 +239,8 @@ key rotation and a signing proxy), 6–9, and the cleanup list.
 
 ## Open
 
-- [ ] Two remaining bulb MACs, then four DHCP reservations. `npm run bulbs` reports and verifies.
+- [ ] Create four DHCP reservations using the MACs in `home-control/README.md`. `npm run bulbs`
+      currently confirms every bulb at its configured address.
 - [ ] `eas secret:create` for the five `ROOM_TUYA_*` vars before the next cloud build — without them the
       build succeeds and ships unconfigured.
 - [ ] CI: 71 assertions and a native-wiring guard exist, and nothing runs them on push.

@@ -20,6 +20,9 @@ export function Tile({
   tint,
   disabled,
   busy,
+  accessibilityLabel,
+  accessibilityHint,
+  checked,
   onPress,
   onLongPress,
   style,
@@ -29,6 +32,9 @@ export function Tile({
   disabled?: boolean;
   /** Ignores presses while a command is in flight, without dimming. */
   busy?: boolean;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
+  checked?: boolean;
   onPress?: () => void;
   onLongPress?: () => void;
   style?: StyleProp<ViewStyle>;
@@ -36,6 +42,16 @@ export function Tile({
 }) {
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={{ disabled: disabled || busy, busy, checked }}
+      accessibilityActions={onLongPress ? [{ name: 'longpress', label: 'Adjust' }] : undefined}
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === 'longpress') {
+          onLongPress?.();
+        }
+      }}
       disabled={disabled || busy}
       onPress={onPress}
       onLongPress={onLongPress}
@@ -60,11 +76,13 @@ export function Tile({
 
 export function PowerButton({
   on,
+  available,
   busy,
   disabled,
   onPress,
 }: {
   on: boolean;
+  available?: boolean | null;
   busy: boolean;
   disabled: boolean;
   onPress: () => void;
@@ -73,7 +91,9 @@ export function PowerButton({
 
   return (
     <Pressable
-      accessibilityLabel={on ? 'Turn AC off' : 'Turn AC on'}
+      accessibilityRole="button"
+      accessibilityLabel={`${available === false ? 'AC infrared hub offline. Retry: ' : ''}${on ? 'Turn AC off' : 'Turn AC on'}`}
+      accessibilityState={{ checked: on, busy, disabled }}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
@@ -111,7 +131,9 @@ export function StepButton({
 }) {
   return (
     <Pressable
+      accessibilityRole="button"
       accessibilityLabel={label === '+' ? 'Warmer' : 'Cooler'}
+      accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [ui.step, pressed ? ui.tilePressed : null, disabled ? ui.disabled : null]}
@@ -168,6 +190,9 @@ export function Segmented({
         return (
           <Pressable
             key={item.id}
+            accessibilityRole="button"
+            accessibilityLabel={item.sub ? `${item.label}, ${item.sub}` : item.label}
+            accessibilityState={{ selected, disabled }}
             disabled={disabled}
             onPress={() => onSelect(item.id)}
             style={({ pressed }) => [
@@ -213,7 +238,10 @@ export function CycleButton({
 }) {
   return (
     <Pressable
+      accessibilityRole="button"
       accessibilityLabel={`${label}: ${value}`}
+      accessibilityHint="Cycles to the next option"
+      accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
@@ -277,7 +305,9 @@ export function MergeButton({
 }) {
   return (
     <Pressable
+      accessibilityRole="button"
       accessibilityLabel={merged ? 'Separate lights' : 'Combine lights'}
+      accessibilityState={{ checked: merged }}
       hitSlop={8}
       onPress={onPress}
       style={({ pressed }) => [

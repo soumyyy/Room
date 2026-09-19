@@ -27,12 +27,45 @@ const tokenCache = {
   expiresAt: 0,
 };
 
+const TUYA_REQUEST_TIMEOUT_MS = 8_000;
+
 function normalizeNetworkError(error: unknown, fallback: string) {
+  if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError') {
+    return new Error('Tuya Cloud timed out.');
+  }
+
   if (error instanceof TypeError) {
     return new Error(fallback);
   }
 
   return error instanceof Error ? error : new Error(fallback);
+}
+
+async function fetchTuya(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TUYA_REQUEST_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function readPayload(response: Response, fallback: string): Promise<Record<string, unknown>> {
+  try {
+    return (await response.json()) as Record<string, unknown>;
+  } catch {
+    throw new Error(response.ok ? 'Tuya Cloud returned an invalid response.' : fallback);
+  }
+}
+
+function errorMessage(payload: Record<string, unknown>, fallback: string) {
+  if (String(payload.code ?? '') === '30003') {
+    return 'Device is offline.';
+  }
+
+  return typeof payload.msg === 'string' && payload.msg ? payload.msg : fallback;
 }
 
 function sha256(input: string): string {
@@ -100,7 +133,7 @@ async function getAccessToken(forceRefresh = false): Promise<string> {
 
   let response: Response;
   try {
-    response = await fetch(`${TUYA_CLOUD.apiBaseUrl}${requestPath}`, {
+    response = await fetchTuya(`${TUYA_CLOUD.apiBaseUrl}${requestPath}`, {
       method: 'GET',
       headers,
     });
@@ -108,10 +141,10 @@ async function getAccessToken(forceRefresh = false): Promise<string> {
     throw normalizeNetworkError(error, 'Unable to reach Tuya Cloud.');
   }
 
-  const payload = (await response.json()) as Record<string, unknown>;
+  const payload = await readPayload(response, 'Tuya token request failed');
 
   if (!response.ok || !payload.success) {
-    throw new Error((payload.msg as string) || 'Tuya token request failed');
+    throw new Error(errorMessage(payload, 'Tuya token request failed'));
   }
 
   const result = payload.result as Record<string, unknown>;
@@ -143,7 +176,7 @@ async function tuyaRequest<T>({
 
     let response: Response;
     try {
-      response = await fetch(`${TUYA_CLOUD.apiBaseUrl}${requestPath}`, {
+      response = await fetchTuya(`${TUYA_CLOUD.apiBaseUrl}${requestPath}`, {
         method,
         headers,
         ...(bodyString ? { body: bodyString } : {}),
@@ -152,10 +185,10 @@ async function tuyaRequest<T>({
       throw normalizeNetworkError(error, 'Unable to reach Tuya Cloud.');
     }
 
-    const payload = (await response.json()) as Record<string, unknown>;
+    const payload = await readPayload(response, 'Tuya request failed');
 
     if (!response.ok || !payload.success) {
-      const error = new Error((payload.msg as string) || 'Tuya request failed') as Error & {
+      const error = new Error(errorMessage(payload, 'Tuya request failed')) as Error & {
         code?: unknown;
       };
       error.code = payload.code;
@@ -187,6 +220,13 @@ export async function getAcStatus(): Promise<AcStatus> {
   return tuyaRequest<AcStatus>({
     method: 'GET',
     path: `/v2.0/infrareds/${infraredId}/remotes/${acRemoteId}/ac/status`,
+  });
+}
+
+export async function getInfraredDevice(): Promise<{ online: boolean }> {
+  return tuyaRequest({
+    method: 'GET',
+    path: `/v1.0/devices/${TUYA_CLOUD.infraredId}`,
   });
 }
 

@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="590" viewBox="0 0 1600 590" role="img" aria-labelledby="title description">
+  <title id="title">Room widget current and proposed layout</title>
+  <desc id="description">The current widget has Enter and Leave buttons beside tall AC and Lights tiles. The proposed widget adds a full-height Fan button beneath AC and a thin Tube bar beneath Lights.</desc>
+
+  <defs>
+    <linearGradient id="canvas" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#20242a"/>
+      <stop offset="1" stop-color="#121519"/>
+    </linearGradient>
+    <linearGradient id="cyanTile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#123b43"/>
+      <stop offset="1" stop-color="#09282f"/>
+    </linearGradient>
+    <linearGradient id="amberTile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#49370c"/>
+      <stop offset="1" stop-color="#241d09"/>
+    </linearGradient>
+    <linearGradient id="neutralTile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#292d32"/>
+      <stop offset="1" stop-color="#1d2024"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-30%" width="140%" height="170%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000" flood-opacity=".38"/>
+    </filter>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif; }
+      .heading { fill: #c7cbd1; font-size: 28px; font-weight: 700; letter-spacing: 2px; }
+      .label { fill: #fff; font-size: 22px; font-weight: 600; }
+      .tile-name { font-size: 20px; font-weight: 600; }
+      .reading { fill: #fff; font-size: 42px; font-weight: 650; }
+      .icon { fill: none; stroke: currentColor; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="590" fill="url(#canvas)"/>
+
+  <text class="heading" x="70" y="74">CURRENT</text>
+  <text class="heading" x="850" y="74">PROPOSED</text>
+
+  <!-- Current widget -->
+  <g filter="url(#shadow)">
+    <rect x="60" y="108" width="700" height="382" rx="42" fill="#050607" stroke="#353a40" stroke-width="2"/>
+
+    <!-- Enter -->
+    <rect x="88" y="136" width="170" height="151" rx="28" fill="url(#neutralTile)" stroke="#393e44" stroke-width="2"/>
+    <g transform="translate(142 164)" color="#e8ebef">
+      <path class="icon" d="M22 5h38v50H22zM8 30h36M8 30l11-11M8 30l11 11"/>
+    </g>
+    <text class="label" x="173" y="258" text-anchor="middle">Enter</text>
+
+    <!-- Leave -->
+    <rect x="88" y="311" width="170" height="151" rx="28" fill="url(#neutralTile)" stroke="#393e44" stroke-width="2"/>
+    <g transform="translate(140 334)" color="#e8ebef">
+      <circle cx="27" cy="11" r="7" fill="currentColor" stroke="none"/>
+      <path class="icon" d="M27 23l-8 25 17 12M26 34l17 10M19 48L8 70M36 60l14 13M51 31h27M68 21l10 10-10 10"/>
+    </g>
+    <text class="label" x="173" y="437" text-anchor="middle">Leave</text>
+
+    <!-- AC -->
+    <rect x="278" y="136" width="220" height="326" rx="30" fill="url(#cyanTile)" stroke="#3fdcf3" stroke-width="3"/>
+    <text x="302" y="173" fill="#8deafa" class="tile-name">AC</text>
+    <g transform="translate(412 151)" color="#62e6fa">
+      <path class="icon" d="M18 0v44M0 22h36M5 7l26 30M31 7L5 37M18 0l-6 7M18 0l6 7M18 44l-6-7M18 44l6-7" stroke-width="3.5"/>
+    </g>
+    <text class="reading" x="302" y="416">27°</text>
+
+    <!-- Lights -->
+    <rect x="518" y="136" width="214" height="326" rx="30" fill="url(#amberTile)" stroke="#ffbd2e" stroke-width="3"/>
+    <text x="542" y="173" fill="#ffd477" class="tile-name">Lights</text>
+    <g transform="translate(666 149)" color="#ffc43b">
+      <path class="icon" d="M18 2a17 17 0 0 0-11 30c4 4 5 7 5 11h12c0-4 1-7 5-11A17 17 0 0 0 18 2zM12 49h12M14 56h8" stroke-width="3.5"/>
+    </g>
+    <text class="reading" x="542" y="416">100%</text>
+  </g>
+
+  <!-- Proposed widget -->
+  <g filter="url(#shadow)">
+    <rect x="840" y="108" width="700" height="382" rx="42" fill="#050607" stroke="#353a40" stroke-width="2"/>
+
+    <!-- Enter -->
+    <rect x="868" y="136" width="170" height="151" rx="28" fill="url(#neutralTile)" stroke="#393e44" stroke-width="2"/>
+    <g transform="translate(922 164)" color="#e8ebef">
+      <path class="icon" d="M22 5h38v50H22zM8 30h36M8 30l11-11M8 30l11 11"/>
+    </g>
+    <text class="label" x="953" y="258" text-anchor="middle">Enter</text>
+
+    <!-- Leave -->
+    <rect x="868" y="311" width="170" height="151" rx="28" fill="url(#neutralTile)" stroke="#393e44" stroke-width="2"/>
+    <g transform="translate(920 334)" color="#e8ebef">
+      <circle cx="27" cy="11" r="7" fill="currentColor" stroke="none"/>
+      <path class="icon" d="M27 23l-8 25 17 12M26 34l17 10M19 48L8 70M36 60l14 13M51 31h27M68 21l10 10-10 10"/>
+    </g>
+    <text class="label" x="953" y="437" text-anchor="middle">Leave</text>
+
+    <!-- AC tile -->
+    <rect x="1058" y="136" width="220" height="151" rx="28" fill="url(#cyanTile)" stroke="#3fdcf3" stroke-width="3"/>
+    <text x="1082" y="173" fill="#8deafa" class="tile-name">AC</text>
+    <g transform="translate(1192 151)" color="#62e6fa">
+      <path class="icon" d="M18 0v44M0 22h36M5 7l26 30M31 7L5 37M18 0l-6 7M18 0l6 7M18 44l-6-7M18 44l6-7" stroke-width="3.5"/>
+    </g>
+    <text class="reading" x="1082" y="258">27°</text>
+
+    <!-- Full-height Fan tile below AC, matching the Leave button -->
+    <rect x="1058" y="311" width="220" height="151" rx="28" fill="url(#neutralTile)" stroke="#40464c" stroke-width="2"/>
+    <text x="1082" y="348" fill="#c8cdd2" class="tile-name">Fan</text>
+    <g transform="translate(1192 326) scale(1.15)" color="#c8cdd2">
+      <circle cx="17" cy="17" r="4" fill="currentColor" stroke="none"/>
+      <path d="M17 14C7 10 4 2 10 0c7-2 10 6 8 14M20 17c10-3 17 2 14 8-3 6-11 4-16-4M15 20c0 10-7 15-12 10-5-5 0-12 11-14" fill="currentColor" opacity=".9"/>
+    </g>
+    <text x="1082" y="438" fill="#8f969d" font-size="28" font-weight="650">Off</text>
+
+    <!-- Lights main tile -->
+    <rect x="1298" y="136" width="214" height="247" rx="30" fill="url(#amberTile)" stroke="#ffbd2e" stroke-width="3"/>
+    <text x="1322" y="173" fill="#ffd477" class="tile-name">Lights</text>
+    <g transform="translate(1446 149)" color="#ffc43b">
+      <path class="icon" d="M18 2a17 17 0 0 0-11 30c4 4 5 7 5 11h12c0-4 1-7 5-11A17 17 0 0 0 18 2zM12 49h12M14 56h8" stroke-width="3.5"/>
+    </g>
+    <text class="reading" x="1322" y="340">100%</text>
+
+    <!-- Thin Tube bar below Lights -->
+    <rect x="1298" y="399" width="214" height="63" rx="20" fill="url(#neutralTile)" stroke="#40464c" stroke-width="2"/>
+    <!-- Matches the app's TubeGlyph: a single slim rounded tube, with no rays. -->
+    <rect x="1327" y="413" width="12" height="35" rx="6" fill="#d8dce0"/>
+    <text x="1416" y="439" fill="#fff" font-size="20" font-weight="600" text-anchor="middle">Tube</text>
+  </g>
+
+  <g transform="translate(0 534)">
+    <circle cx="556" cy="0" r="4" fill="#3fdcf3"/>
+    <text x="570" y="7" fill="#aeb4ba" font-size="18">Fan matches the Leave button height</text>
+    <circle cx="900" cy="0" r="4" fill="#ffbd2e"/>
+    <text x="914" y="7" fill="#aeb4ba" font-size="18">Tube stays a low, full-width bar</text>
+  </g>
+</svg>

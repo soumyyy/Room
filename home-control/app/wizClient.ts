@@ -1,9 +1,9 @@
 import { NativeModules } from 'react-native';
 
 import type { BulbConfig } from './config';
-import type { WizPilotStatus } from './wizDirect';
+import type { WizCommandResult, WizPilotStatus } from './wizDirect';
 
-export type { WizPilotStatus } from './wizDirect';
+export type { WizCommandResult, WizPilotStatus } from './wizDirect';
 
 function hasDirectWizSupport() {
   const udpModule = (NativeModules as Record<string, unknown>)?.UdpSockets as
@@ -31,7 +31,7 @@ export async function getWizStatuses(bulbs: BulbConfig[]): Promise<WizPilotStatu
 export async function sendWizCommand(
   bulbs: BulbConfig[],
   params: Record<string, unknown>,
-): Promise<WizPilotStatus[]> {
+): Promise<WizCommandResult> {
   if (!hasDirectWizSupport()) {
     throw new Error(
       'WiZ direct control is unavailable in this build. Reinstall a full native app build.',

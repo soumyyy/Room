@@ -50,15 +50,18 @@ export default function ColorSheet({
             onRequestClose={onClose}
           >
             <Pressable
+              accessible={false}
               style={styles.sheetOverlay}
               onPress={onClose}
             />
-            <View style={styles.sheet}>
+            <View style={styles.sheet} accessibilityViewIsModal>
               <View style={styles.sheetHandle} />
 
               <View style={styles.sheetHeader}>
                 <Text style={styles.sheetTitle}>{group.name}</Text>
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Close light controls"
                   onPress={onClose}
                   style={styles.sheetClose}
                   hitSlop={12}
@@ -85,6 +88,9 @@ export default function ColorSheet({
                   {WHITE_PRESETS.map((preset) => (
                     <Pressable
                       key={preset.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={preset.name}
+                      accessibilityState={{ selected: activeColorId === preset.id, disabled: busy }}
                       onPress={() => void onApplyPreset(preset)}
                       style={({ pressed }) => [
                         styles.colorChip,
@@ -115,6 +121,9 @@ export default function ColorSheet({
                       {row.map((preset) => (
                         <Pressable
                           key={preset.id}
+                          accessibilityRole="button"
+                          accessibilityLabel={preset.name}
+                          accessibilityState={{ selected: activeColorId === preset.id, disabled: busy }}
                           onPress={() => void onApplyPreset(preset)}
                           style={({ pressed }) => [
                             styles.colorPaletteTile,

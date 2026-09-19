@@ -83,7 +83,13 @@ import {
   recordLightCommand,
   saveAwayState,
 } from './roomSnapshot';
-import { getAcStatus, getNodeDevice, sendAcScene, sendNodeCommands } from './tuya';
+import {
+  getAcStatus,
+  getInfraredDevice,
+  getNodeDevice,
+  sendAcScene,
+  sendNodeCommands,
+} from './tuya';
 import { getWizStatuses, isUsingDirectWiz, sendWizCommand, type WizPilotStatus } from './wizClient';
 import { styles } from './styles';
 
@@ -102,6 +108,7 @@ function switchedOn(state: NodeChange, value: boolean): NodeChange {
 
 export default function AppScreen() {
   const [ac, setAc] = useState<AcScene>(INITIAL_SCENE);
+  const [acAvailable, setAcAvailable] = useState<boolean | null>(null);
   const [acBusy, setAcBusy] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [bulbs, setBulbs] = useState<BulbState[]>(() => BULBS.map(createBulbState));
@@ -115,7 +122,7 @@ export default function AppScreen() {
   // The ref is the truth for taps and commands; state mirrors it for rendering.
   // Reading state inside a handler is one render behind a fast second tap.
   const nodeRef = useRef<NodeState>(node);
-  const nodeQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const nodeQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const nodeQuietUntilRef = useRef(0);
   const nodeVerifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedRoomState = useRef<AwayState | null>(null);
@@ -156,7 +163,7 @@ export default function AppScreen() {
     }, 2600);
   }
 
-  async function loadStatus(options?: { showLoader?: boolean }) {
+  async function loadStatus(options?: { showLoader?: boolean; silent?: boolean }) {
     if (!tuyaReady) {
       showErrorToast('AC control is not configured.');
       setLoadingStatus(false);
@@ -168,13 +175,38 @@ export default function AppScreen() {
     }
 
     try {
-      const status = await getAcStatus();
-      const scene = normalizeStatus(status);
+      const [statusResult, deviceResult] = await Promise.allSettled([
+        getAcStatus(),
+        getInfraredDevice(),
+      ]);
+
+      if (deviceResult.status === 'fulfilled') {
+        setAcAvailable(deviceResult.value.online);
+
+        if (!deviceResult.value.online && !options?.silent) {
+          showErrorToast('AC infrared hub is offline.');
+        }
+      }
+
+      if (statusResult.status === 'rejected') {
+        throw statusResult.reason;
+      }
+
+      const scene = normalizeStatus(statusResult.value);
+      acRef.current = scene;
       setAc(scene);
-      recordAcScene(scene);
+
+      // Tuya's virtual AC remote can return its last remembered scene while the
+      // physical IR hub is offline. Show that scene as stale context, but do not
+      // refresh the widget timestamp and present it as a new observation.
+      if (deviceResult.status !== 'fulfilled' || deviceResult.value.online) {
+        recordAcScene(scene);
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to reach Tuya Cloud';
-      showErrorToast(message);
+      if (!options?.silent) {
+        const message = error instanceof Error ? error.message : 'Unable to reach Tuya Cloud';
+        showErrorToast(message);
+      }
     } finally {
       if (options?.showLoader ?? true) {
         setLoadingStatus(false);
@@ -256,10 +288,10 @@ export default function AppScreen() {
    * and a command the cloud accepted needs no second read to be believed. A
    * quiet read follows once the cloud has caught up, to catch a wall switch.
    */
-  function submitNode(change: NodeChange): Promise<void> {
+  function submitNode(change: NodeChange, options?: { silent?: boolean }): Promise<boolean> {
     const commands = nodeCommands(change);
     if (!commands.length) {
-      return Promise.resolve();
+      return Promise.resolve(true);
     }
 
     const previous = nodeRef.current;
@@ -274,12 +306,23 @@ export default function AppScreen() {
           throw new Error('Switchboard command not confirmed.');
         }
 
+        updateNode((current) => ({ ...current, available: true }));
         nodeQuietUntilRef.current = Date.now() + NODE_SETTLE_MS;
         scheduleNodeVerify();
+        return true;
       } catch (error) {
         updateNode((current) => revertNodeChange(current, change, previous));
-        const message = error instanceof Error ? error.message : 'Switchboard command failed';
-        showErrorToast(message);
+
+        if (error && typeof error === 'object' && 'code' in error && String(error.code) === '30003') {
+          updateNode((current) => ({ ...current, available: false }));
+        }
+
+        if (!options?.silent) {
+          const message = error instanceof Error ? error.message : 'Switchboard command failed';
+          showErrorToast(message);
+        }
+
+        return false;
       }
     };
 
@@ -317,41 +360,53 @@ export default function AppScreen() {
     }
   }
 
-  async function submitAcScene(nextScene: AcScene) {
+  async function submitAcScene(nextScene: AcScene, options?: { silent?: boolean }): Promise<boolean> {
     const previous = acRef.current;
-    console.log('[trace] ac submit', JSON.stringify(nextScene), 'previous', JSON.stringify(previous)); // TRACE
 
     if (sceneEquals(previous, nextScene)) {
-      console.log('[trace] ac SKIPPED: scene equals what the screen already shows'); // TRACE
-      return;
+      return true;
     }
 
+    acRef.current = nextScene;
     setAc(nextScene);
     setAcBusy(true);
 
     try {
       const accepted = await sendAcScene(sceneToPayload(nextScene));
-      console.log('[trace] ac sendAcScene ->', accepted); // TRACE
 
       if (!accepted) {
         throw new Error('AC command not confirmed.');
       }
 
+      setAcAvailable(true);
+
       try {
         const status = await getAcStatus();
         const confirmed = normalizeStatus(status);
-        console.log('[trace] ac readback', JSON.stringify(status), '->', JSON.stringify(confirmed)); // TRACE
+        acRef.current = confirmed;
         setAc(confirmed);
         recordAcScene(confirmed);
       } catch {
+        acRef.current = nextScene;
         setAc(nextScene);
         recordAcScene(nextScene);
       }
+
+      return true;
     } catch (error) {
+      acRef.current = previous;
       setAc(previous);
-      console.log('[trace] ac FAILED', error instanceof Error ? error.message : String(error)); // TRACE
-      const message = error instanceof Error ? error.message : 'AC command failed';
-      showErrorToast(message);
+
+      if (error && typeof error === 'object' && 'code' in error && String(error.code) === '30003') {
+        setAcAvailable(false);
+      }
+
+      if (!options?.silent) {
+        const message = error instanceof Error ? error.message : 'AC command failed';
+        showErrorToast(message);
+      }
+
+      return false;
     } finally {
       setAcBusy(false);
     }
@@ -361,7 +416,7 @@ export default function AppScreen() {
     group: BulbGroupConfig,
     optimisticUpdate: (bulb: BulbState) => BulbState,
     params: Record<string, unknown>,
-    options?: { presetId?: string },
+    options?: { presetId?: string; silent?: boolean },
   ) {
     const snapshot = bulbs.filter((bulb) => group.bulbIds.includes(bulb.id));
 
@@ -387,11 +442,23 @@ export default function AppScreen() {
     }
 
     try {
-      const statuses = await sendWizCommand(
+      const result = await sendWizCommand(
         snapshot.map(({ id, name, ip }) => ({ id, name, ip })),
         params,
       );
-      setBulbs((current) => mergeBulbStatuses(current, statuses));
+      setBulbs((current) => mergeBulbStatuses(current, result.statuses));
+
+      if (result.confirmedIds.length !== snapshot.length) {
+        if (!options?.silent) {
+          showErrorToast(
+            result.confirmedIds.length
+              ? `${group.name}: ${result.confirmedIds.length}/${snapshot.length} lights confirmed.`
+              : `${group.name} did not confirm the command.`,
+          );
+        }
+        return false;
+      }
+
       recordLightCommand(group.id, params, options?.presetId);
       return true;
     } catch (error) {
@@ -405,7 +472,9 @@ export default function AppScreen() {
         error instanceof Error
           ? error.message
           : 'WiZ group command failed';
-      showErrorToast(message);
+      if (!options?.silent) {
+        showErrorToast(message);
+      }
       return false;
     }
   }
@@ -637,54 +706,81 @@ export default function AppScreen() {
 
   async function leaveRoom() {
     setRoomBusy(true);
-    await flushPendingCycle();
 
-    const scene = acRef.current;
-    const saved: AwayState = {
-      ac: scene,
-      activeGroupIds: BULB_GROUPS
-        .filter((g) => bulbsForGroup(g, bulbs).some((b) => b.isOn))
-        .map((g) => g.id),
-      node: { tube: nodeRef.current.tube, fan: nodeRef.current.fan },
-    };
+    try {
+      await flushPendingCycle();
 
-    // Saved before anything is switched off, so an interruption part-way still
-    // leaves Enter room knowing what to bring back.
-    savedRoomState.current = saved;
-    saveAwayState(JSON.stringify(saved));
-    console.log('[trace] LEAVE saved', JSON.stringify(saved)); // TRACE
+      const scene = acRef.current;
+      const saved: AwayState = {
+        ac: scene,
+        activeGroupIds: BULB_GROUPS
+          .filter((g) => bulbsForGroup(g, bulbs).some((b) => b.isOn))
+          .map((g) => g.id),
+        node: { tube: nodeRef.current.tube, fan: nodeRef.current.fan },
+      };
 
-    await Promise.all([
-      scene.power ? submitAcScene({ ...scene, power: 0 }) : Promise.resolve(),
-      submitNode(switchedOn(nodeRef.current, false)),
-      ...BULB_GROUPS.map((g) =>
-        runGroupCommand(g, (b) => ({ ...b, isOn: false }), { state: false }),
-      ),
-    ]);
+      // Saved before anything is switched off, so an interruption part-way still
+      // leaves Enter room knowing what to bring back.
+      savedRoomState.current = saved;
+      saveAwayState(JSON.stringify(saved));
 
-    setInRoom(false);
-    setRoomBusy(false);
+      const results = await Promise.all([
+        scene.power
+          ? submitAcScene({ ...scene, power: 0 }, { silent: true })
+          : Promise.resolve(true),
+        submitNode(switchedOn(nodeRef.current, false), { silent: true }),
+        ...BULB_GROUPS.map((g) =>
+          runGroupCommand(
+            g,
+            (b) => ({ ...b, isOn: false }),
+            { state: false },
+            { silent: true },
+          ),
+        ),
+      ]);
+
+      setInRoom(false);
+
+      if (results.some((ok) => !ok)) {
+        showErrorToast('Room left, but some devices could not be confirmed off.');
+      }
+    } finally {
+      setRoomBusy(false);
+    }
   }
 
   async function enterRoom() {
     setRoomBusy(true);
-    setInRoom(true);
-    const saved = savedRoomState.current;
-    console.log('[trace] ENTER saved =', JSON.stringify(saved)); // TRACE
 
-    if (saved) {
-      await Promise.all([
-        saved.ac.power ? submitAcScene(saved.ac) : Promise.resolve(),
-        submitNode(switchedOn(saved.node, true)),
-        ...BULB_GROUPS
-          .filter((g) => saved.activeGroupIds.includes(g.id))
-          .map((g) => runGroupCommand(g, (b) => ({ ...b, isOn: true }), { state: true })),
-      ]);
+    try {
+      const saved = savedRoomState.current;
+      const results = saved
+        ? await Promise.all([
+            saved.ac.power ? submitAcScene(saved.ac, { silent: true }) : Promise.resolve(true),
+            submitNode(switchedOn(saved.node, true), { silent: true }),
+            ...BULB_GROUPS
+              .filter((g) => saved.activeGroupIds.includes(g.id))
+              .map((g) =>
+                runGroupCommand(
+                  g,
+                  (b) => ({ ...b, isOn: true }),
+                  { state: true },
+                  { silent: true },
+                ),
+              ),
+          ])
+        : [true];
+
+      if (results.every(Boolean)) {
+        savedRoomState.current = null;
+        saveAwayState(null);
+        setInRoom(true);
+      } else {
+        showErrorToast('Some devices were not restored. Tap Enter room to retry.');
+      }
+    } finally {
+      setRoomBusy(false);
     }
-
-    savedRoomState.current = null;
-    saveAwayState(null);
-    setRoomBusy(false);
   }
 
   useEffect(() => {
@@ -729,7 +825,7 @@ export default function AppScreen() {
         setBulbs((current) => bulbsFromSnapshot(current, snapshot));
         setSelectedGroupColor((current) => colorsFromSnapshot(current, snapshot));
         setLoadingStatus(false);
-        void loadStatus({ showLoader: false });
+        void loadStatus({ showLoader: false, silent: true });
       } else {
         await loadStatus({ showLoader: true });
       }
@@ -771,6 +867,10 @@ export default function AppScreen() {
       if (nodeVerifyTimerRef.current) {
         clearTimeout(nodeVerifyTimerRef.current);
       }
+
+      if (cycleTimerRef.current) {
+        clearTimeout(cycleTimerRef.current);
+      }
     };
   }, []);
 
@@ -783,7 +883,7 @@ export default function AppScreen() {
         return;
       }
 
-      void loadStatus({ showLoader: false });
+      void loadStatus({ showLoader: false, silent: true });
       void loadBulbStatus();
       void loadNodeStatus();
     });
@@ -793,7 +893,7 @@ export default function AppScreen() {
 
 
   const shown = draft ?? ac;
-  const acOff = !ac.power;
+  const acOff = !ac.power || acAvailable === false;
   const tempSize = clamp(windowHeight * 0.095, 54, 84);
   const rowHeight = clamp(windowHeight * 0.19, 120, 190);
   const segmentHeight = clamp(windowHeight * 0.07, 50, 60);
@@ -827,6 +927,9 @@ export default function AppScreen() {
       <Tile
         key={key}
         tint={panel.on ? panel.hex : null}
+        accessibilityLabel={`${title}, ${panel.unavailable ? 'unavailable' : panel.on ? `${panel.colorName}, ${panel.brightness} percent` : 'off'}`}
+        accessibilityHint="Double tap to toggle. Long press to adjust color and brightness."
+        checked={panel.on}
         disabled={disabled}
         busy={busy}
         onPress={onPress}
@@ -896,10 +999,12 @@ export default function AppScreen() {
       <View style={screen.acBlock}>
         <PowerButton
           on={!!ac.power}
+          available={acAvailable}
           busy={acBusy}
           disabled={acDisabled}
           onPress={() => submitAcScene({ ...ac, power: ac.power ? 0 : 1 })}
         />
+        {acAvailable === false ? <Text style={screen.acUnavailable}>IR hub offline</Text> : null}
 
         <View
           style={[screen.tempRow, { paddingVertical: tempAir, paddingHorizontal: tempInset }]}
@@ -967,7 +1072,9 @@ export default function AppScreen() {
       <View style={[screen.pair, { height: rowHeight }]}>
         <Tile
           tint={node.fan ? theme.sand : null}
-          disabled={!nodeReady || node.available === false}
+          accessibilityLabel={`Fan, ${nodeStatus ?? (node.fan ? 'on' : 'off')}`}
+          checked={node.fan}
+          disabled={!nodeReady}
           onPress={() => toggleNode('fan')}
           style={screen.fanTile}
         >
@@ -985,7 +1092,9 @@ export default function AppScreen() {
 
         <Tile
           tint={node.tube ? theme.tube : null}
-          disabled={!nodeReady || node.available === false}
+          accessibilityLabel={`Tube light, ${nodeStatus ?? (node.tube ? 'on' : 'off')}`}
+          checked={node.tube}
+          disabled={!nodeReady}
           onPress={() => toggleNode('tube')}
           style={screen.tubeTile}
         >
@@ -1042,6 +1151,9 @@ export default function AppScreen() {
 
       {/* ── Room ──────────────────────────────────────────────────────── */}
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={inRoom ? 'Leave room' : 'Enter room'}
+        accessibilityState={{ busy: roomBusy, disabled: roomBusy }}
         disabled={roomBusy}
         onPress={() => (inRoom ? leaveRoom() : enterRoom())}
         style={({ pressed }) => [
@@ -1098,6 +1210,15 @@ const screen = StyleSheet.create({
   acBlock: {
     alignItems: 'center',
     gap: theme.gap,
+    position: 'relative',
+  },
+  acUnavailable: {
+    position: 'absolute',
+    right: 2,
+    top: 27,
+    color: theme.dim,
+    fontSize: 11,
+    fontWeight: '600',
   },
   tempRow: {
     flexDirection: 'row',
