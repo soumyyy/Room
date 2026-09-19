@@ -133,6 +133,9 @@ ${bulbs.map((b) => `    (id: ${q(b.id)}, name: ${q(b.name)}, ip: ${q(b.ip)}, gro
   ]
 
   static let groupIDs = [${groups.map((g) => q(g.id)).join(', ')}]
+
+  /// The Tuya switchboard: switch_1 is the tube light, switch_2 the fan.
+  static let nodeID = ${q(node.id)}
 }
 `;
 }

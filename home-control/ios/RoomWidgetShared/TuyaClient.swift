@@ -75,6 +75,31 @@ private struct TuyaACStatusResult: Decodable {
   }
 }
 
+/// One datapoint of a device reply. Only switches matter here, so a value that
+/// is not a boolean (a countdown, an empty string) reads as absent rather than
+/// failing the whole decode.
+private struct TuyaDatapoint: Decodable {
+  let code: String
+  let value: Bool?
+
+  private enum CodingKeys: String, CodingKey { case code, value }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    code = try container.decode(String.self, forKey: .code)
+    value = try? container.decode(Bool.self, forKey: .value)
+  }
+}
+
+private struct TuyaNodeResult: Decodable {
+  let online: Bool?
+  let status: [TuyaDatapoint]?
+}
+
+private struct TuyaCommandBody: Encodable {
+  let commands: [NodeCommand]
+}
+
 enum RoomNetworkError: LocalizedError {
   case invalidURL
   case invalidResponse
@@ -119,6 +144,32 @@ actor TuyaClient {
     )
 
     return result.scene
+  }
+
+  /// The relays as the cloud reports them, or nil when the node is offline or
+  /// the reply names neither switch.
+  func fetchNode() async throws -> NodeState? {
+    let result = try await request(
+      method: "GET",
+      path: "/v1.0/devices/\(RoomConfig.tuya.nodeID)",
+      expecting: TuyaNodeResult.self
+    )
+
+    return NodeState(
+      online: result.online,
+      datapoints: (result.status ?? []).map { (code: $0.code, value: $0.value) }
+    )
+  }
+
+  func sendNodeCommands(_ commands: [NodeCommand]) async throws {
+    guard !commands.isEmpty else { return }
+
+    _ = try await request(
+      method: "POST",
+      path: "/v1.0/devices/\(RoomConfig.tuya.nodeID)/commands",
+      body: TuyaCommandBody(commands: commands),
+      expecting: TuyaIgnoredResult.self
+    )
   }
 
   private func request<Result: Decodable, Body: Encodable>(

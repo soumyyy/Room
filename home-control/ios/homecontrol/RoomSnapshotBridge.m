@@ -10,6 +10,9 @@ RCT_EXTERN_METHOD(readAway:(RCTPromiseResolveBlock)resolve
 
 RCT_EXTERN_METHOD(saveAway:(NSString *)json)
 
+RCT_EXTERN_METHOD(recordNode:(nonnull NSNumber *)tube
+                  fan:(nonnull NSNumber *)fan)
+
 RCT_EXTERN_METHOD(recordAC:(nonnull NSNumber *)power
                   mode:(nonnull NSNumber *)mode
                   temp:(nonnull NSNumber *)temp

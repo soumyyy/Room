@@ -26,6 +26,7 @@ import {
   TubeGlyph,
   ui,
 } from './components/RoomUi';
+import { applyFont } from './fonts';
 import { clamp, theme } from './theme';
 import { BULB_GROUPS, BULBS, type BulbConfig, type BulbGroupConfig } from './config';
 import {
@@ -80,6 +81,7 @@ import {
   readAwayState,
   readRoomSnapshot,
   recordAcScene,
+  recordNodeState,
   recordLightCommand,
   saveAwayState,
 } from './roomSnapshot';
@@ -237,6 +239,14 @@ export default function AppScreen() {
   function updateNode(update: (current: NodeState) => NodeState) {
     nodeRef.current = update(nodeRef.current);
     setNode(nodeRef.current);
+
+    // The widget draws the relays from the shared snapshot, so keep it current.
+    // Only when the node is known to be reachable: an offline node's last state
+    // is not something to show as fact.
+    const { available, tube, fan } = nodeRef.current;
+    if (available === true) {
+      recordNodeState(tube, fan);
+    }
   }
 
   /**
@@ -1200,7 +1210,7 @@ export default function AppScreen() {
   );
 }
 
-const screen = StyleSheet.create({
+const screen = applyFont(StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: theme.bg,
@@ -1342,4 +1352,4 @@ const screen = StyleSheet.create({
     color: '#0d0d0d',
     fontWeight: '700',
   },
-});
+}));

@@ -41,6 +41,7 @@ import {
   windLabel,
 } from './roomDomain';
 import { BULBS, BULB_GROUPS } from './config';
+import { applyFont, familyFor } from './fonts';
 
 test('AC status: Tuya reports numbers or numeric strings', () => {
   assert.equal(normalizeStatus({ power_open: true, temp: '23' }).temp, 23);
@@ -384,4 +385,37 @@ test('away: a state missing pieces restores nothing rather than guessing', () =>
   assert.equal(away.ac.power, 0);
   assert.deepEqual(away.activeGroupIds, []);
   assert.deepEqual(away.node, { tube: false, fan: false });
+});
+
+// ── Manrope: one file per weight, chosen from the weight a style asks for ────
+
+test('font: each weight maps to its own Manrope file', () => {
+  assert.equal(familyFor('300'), 'Manrope-Light');
+  assert.equal(familyFor('400'), 'Manrope-Regular');
+  assert.equal(familyFor('500'), 'Manrope-Medium');
+  assert.equal(familyFor('600'), 'Manrope-SemiBold');
+  assert.equal(familyFor('700'), 'Manrope-Bold');
+});
+
+test('font: unspecified and named weights resolve sensibly', () => {
+  assert.equal(familyFor(undefined), 'Manrope-Regular');
+  assert.equal(familyFor('normal'), 'Manrope-Regular');
+  assert.equal(familyFor('bold'), 'Manrope-Bold');
+  assert.equal(familyFor('200'), 'Manrope-Light');
+  assert.equal(familyFor('800'), 'Manrope-Bold');
+});
+
+test('font: text styles get a family and lose fontWeight, others are untouched', () => {
+  const source = {
+    title: { fontSize: 20, fontWeight: '600', color: '#fff' },
+    plain: { fontSize: 12 },
+    box: { padding: 4, backgroundColor: '#000' },
+  };
+  const styled = applyFont(source) as unknown as Record<string, Record<string, unknown>>;
+  assert.equal(styled.title.fontFamily, 'Manrope-SemiBold');
+  assert.equal('fontWeight' in styled.title, false);
+  assert.equal(styled.title.color, '#fff');
+  assert.equal(styled.plain.fontFamily, 'Manrope-Regular');
+  assert.deepEqual(styled.box, source.box);
+  assert.equal(source.title.fontWeight, '600');
 });

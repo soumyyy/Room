@@ -58,6 +58,16 @@ final class RoomSnapshotBridge: NSObject {
     }
   }
 
+  /// The switchboard's relays, so the widget can show and toggle them. Both
+  /// arguments are required: the app only records once it has read the node.
+  @objc(recordNode:fan:)
+  func recordNode(_ tube: NSNumber, fan: NSNumber) {
+    RoomSnapshotStore.update {
+      $0.apply(NodeState(tube: tube.boolValue, fan: fan.boolValue))
+    }
+    reload()
+  }
+
   @objc(recordAC:mode:temp:wind:)
   func recordAC(_ power: NSNumber, mode: NSNumber, temp: NSNumber, wind: NSNumber) {
     let scene = AcScene(

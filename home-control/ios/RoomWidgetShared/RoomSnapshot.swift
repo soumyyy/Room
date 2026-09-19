@@ -17,8 +17,11 @@ struct RoomSnapshot: Codable, Sendable, Equatable {
   /// Keyed by the group ids in RoomConfig.lightGroupIDs.
   var lights: [String: LightState]
   var updatedAt: Date?
+  /// The switchboard's relays. Absent in a snapshot saved before it existed,
+  /// which decodes as nil, so an old file still loads.
+  var node: NodeState?
 
-  static let unknown = RoomSnapshot(ac: nil, lights: [:], updatedAt: nil)
+  static let unknown = RoomSnapshot(ac: nil, lights: [:], updatedAt: nil, node: nil)
 
   var acIsOn: Bool? {
     guard let ac else { return nil }
@@ -45,11 +48,35 @@ struct RoomSnapshot: Codable, Sendable, Equatable {
     DeviceReading(isOn: anyLightOn, value: "\(litBrightness ?? RoomConfig.maxBrightness)%")
   }
 
+  var tubeReading: DeviceReading {
+    DeviceReading(isOn: node?.tube, value: "On")
+  }
+
+  var fanReading: DeviceReading {
+    DeviceReading(isOn: node?.fan, value: "On")
+  }
+
+  /// Folds a reading into the node, filling only what it reports so a partial
+  /// answer never erases a known relay.
+  mutating func apply(_ reading: NodeState) {
+    var current = node ?? NodeState()
+    if let tube = reading.tube { current.tube = tube }
+    if let fan = reading.fan { current.fan = fan }
+    node = current
+  }
+
   mutating func setLights(_ state: LightState, forGroups groups: [String]) {
     for group in groups {
       lights[group] = state
     }
   }
+}
+
+/// Each relay is optional on its own: the app may know the tube light while the
+/// fan has never been observed, and unknown must not read as off.
+struct NodeState: Codable, Sendable, Equatable {
+  var tube: Bool?
+  var fan: Bool?
 }
 
 /// One bulb's answer to getPilot.

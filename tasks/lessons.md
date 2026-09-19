@@ -79,3 +79,17 @@ beside the real app instead of replacing it. Release keeps `org.name.homecontrol
 A class reused for two different things (`.row` for both the Mode/Airflow pair and the Fan/Tube row) made a
 flex rule meant for one stretch the other. When a mockup looks wrong, look for shared class names before
 tweaking numbers.
+
+## Two agents in one repo break each other
+
+Codex was committing to this repo and reinstalling `node_modules` while I worked. Symptoms: files I edited
+showed as already committed, files I never touched changed, and Metro (started by the other agent before its
+own reinstall) failed with `Unable to resolve .../metro-runtime/src/modules/empty-module.js`.
+
+- Before editing, `git status` and `git log -3`, and re-read any file that reports it changed on disk.
+- A "Bundling failed ... Unable to resolve <node_modules path>" right after a dependency change means the
+  running Metro is stale, not that the code is wrong: restart it (`--clear`) before debugging further.
+- `npm install --package-lock-only --ignore-scripts` edits the lock without touching `node_modules`, which is
+  safe while Xcode or Metro is running.
+- Render SwiftUI to a PNG on the Mac to check a widget when there is no Simulator: compile the widget file
+  plus the shared Swift files with a small `main.swift` that uses `ImageRenderer`.

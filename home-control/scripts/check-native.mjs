@@ -67,6 +67,10 @@ check(
   'the bridge exports the away-state methods the screen calls',
   /readAway:/.test(bridgeExports) && /saveAway:/.test(bridgeExports),
 );
+check(
+  'the bridge exports recordNode, which the widget reads',
+  /recordNode:/.test(bridgeExports),
+);
 
 if (failures.length) {
   console.error('\nnative wiring check FAILED:');

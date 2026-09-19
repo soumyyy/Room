@@ -68,6 +68,10 @@ struct RoomWidgetView: View {
 
   private var isSmall: Bool { family == .systemSmall }
 
+  /// One corner radius for every button in a layout. The medium widget is
+  /// squarer than the small one.
+  private var tileRadius: CGFloat { isSmall ? 15 : 10 }
+
   var body: some View {
     Group {
       if family == .systemMedium {
@@ -87,7 +91,7 @@ struct RoomWidgetView: View {
       header
 
       HStack(spacing: 7) {
-        acTile
+        acTile(compact: false)
         lightsTile
       }
       .frame(maxHeight: .infinity)
@@ -119,8 +123,17 @@ struct RoomWidgetView: View {
       }
       .frame(width: 122)
 
-      acTile
-      lightsTile
+      // AC and Fan split the column evenly, so Fan is exactly as tall as Leave.
+      VStack(spacing: 8) {
+        acTile(compact: true)
+        fanTile
+      }
+
+      // Lights keeps the tall tile; Tube is a thin bar beneath it.
+      VStack(spacing: 8) {
+        lightsTile
+        tubeBar
+      }
     }
     .padding(13)
   }
@@ -142,15 +155,71 @@ struct RoomWidgetView: View {
 
   // MARK: - Device tiles
 
-  private var acTile: some View {
+  private func acTile(compact: Bool) -> some View {
     deviceTile(
       name: "AC",
       symbol: "snowflake",
       accent: .cyan,
       reading: entry.room.acReading,
+      compact: compact,
       onIntent: ACOnIntent(),
       offIntent: ACOffIntent()
     )
+  }
+
+  private var fanTile: some View {
+    deviceTile(
+      name: "Fan",
+      symbol: "fan.fill",
+      accent: .cyan,
+      reading: entry.room.fanReading,
+      compact: true,
+      onIntent: FanOnIntent(),
+      offIntent: FanOffIntent()
+    )
+    .accessibilityLabel("Fan, \(entry.room.fanReading.isOn ? "on" : "off")")
+  }
+
+  /// A low, full-width bar. It is the tube light, drawn as the same simple
+  /// vertical rounded bar the app uses, lit when the tube is on.
+  @ViewBuilder
+  private var tubeBar: some View {
+    let reading = entry.room.tubeReading
+
+    if reading.isOn {
+      Button(intent: TubeOffIntent()) { tubeBarBody(reading) }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Tube light, on")
+    } else {
+      Button(intent: TubeOnIntent()) { tubeBarBody(reading) }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Tube light, \(reading == .unknown ? "unknown" : "off")")
+    }
+  }
+
+  private func tubeBarBody(_ reading: DeviceReading) -> some View {
+    let style: TileAccent = reading.isOn ? .amber : .neutral
+
+    return ZStack {
+      Text("Tube")
+        .font(.system(size: 11, weight: .semibold))
+        .foregroundStyle(reading.isOn ? style.label : Color.white.opacity(0.7))
+        .lineLimit(1)
+
+      HStack {
+        Capsule()
+          .fill(reading.isOn ? Color.white : Color.white.opacity(0.34))
+          .frame(width: 5, height: 16)
+          .shadow(color: reading.isOn ? Color.white.opacity(0.55) : .clear, radius: 4)
+
+        Spacer(minLength: 0)
+      }
+      .padding(.leading, 14)
+    }
+    .frame(maxWidth: .infinity)
+    .frame(height: 34)
+    .background(tileShape(tileRadius).fill(style.fill))
+    .overlay(tileShape(tileRadius).stroke(style.stroke, lineWidth: 1))
   }
 
   private var lightsTile: some View {
@@ -173,17 +242,18 @@ struct RoomWidgetView: View {
     symbol: String,
     accent: TileAccent,
     reading: DeviceReading,
+    compact: Bool = false,
     onIntent: On,
     offIntent: Off
   ) -> some View {
     if reading.isOn {
       Button(intent: offIntent) {
-        tileBody(name: name, symbol: symbol, accent: accent, reading: reading)
+        tileBody(name: name, symbol: symbol, accent: accent, reading: reading, compact: compact)
       }
       .buttonStyle(.plain)
     } else {
       Button(intent: onIntent) {
-        tileBody(name: name, symbol: symbol, accent: accent, reading: reading)
+        tileBody(name: name, symbol: symbol, accent: accent, reading: reading, compact: compact)
       }
       .buttonStyle(.plain)
     }
@@ -193,14 +263,17 @@ struct RoomWidgetView: View {
     name: String,
     symbol: String,
     accent: TileAccent,
-    reading: DeviceReading
+    reading: DeviceReading,
+    compact: Bool = false
   ) -> some View {
     let style: TileAccent = reading.isOn ? accent : .neutral
+    // A half-height tile has room for a single line of value, not the big one.
+    let valueSize: CGFloat = compact ? 18 : (isSmall ? 20 : 24)
 
     return VStack(alignment: .leading, spacing: 0) {
       HStack(spacing: 4) {
         Text(name)
-          .font(.system(size: isSmall ? 10.5 : 11, weight: .semibold))
+          .font(.system(size: isSmall ? 10.5 : 10, weight: .semibold))
           .foregroundStyle(reading.isOn ? style.label.opacity(0.82) : Color.white.opacity(0.52))
           .lineLimit(1)
           .minimumScaleFactor(0.7)
@@ -216,17 +289,17 @@ struct RoomWidgetView: View {
       Spacer(minLength: 4)
 
       Text(reading.text)
-        .font(.system(size: isSmall ? 20 : 27, weight: .semibold))
+        .font(.system(size: valueSize, weight: .semibold))
         .monospacedDigit()
         .foregroundStyle(reading.isOn ? Color.white : Color.white.opacity(0.34))
         .lineLimit(1)
         .minimumScaleFactor(0.6)
     }
     .padding(.horizontal, isSmall ? 10 : 13)
-    .padding(.vertical, isSmall ? 9 : 12)
+    .padding(.vertical, compact ? 8 : (isSmall ? 9 : 12))
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-    .background(tileShape(15).fill(style.fill))
-    .overlay(tileShape(15).stroke(style.stroke, lineWidth: 1))
+    .background(tileShape(tileRadius).fill(style.fill))
+    .overlay(tileShape(tileRadius).stroke(style.stroke, lineWidth: 1))
   }
 
   // MARK: - Scenes
@@ -261,8 +334,8 @@ struct RoomWidgetView: View {
       .minimumScaleFactor(0.8)
       .foregroundStyle(Color.white)
       .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .background(tileShape(leadingAligned ? 15 : 11).fill(TileAccent.neutral.fill))
-      .overlay(tileShape(leadingAligned ? 15 : 11).stroke(TileAccent.neutral.stroke, lineWidth: 1))
+      .background(tileShape(leadingAligned ? tileRadius : 11).fill(TileAccent.neutral.fill))
+      .overlay(tileShape(leadingAligned ? tileRadius : 11).stroke(TileAccent.neutral.stroke, lineWidth: 1))
     }
     .buttonStyle(.plain)
   }
@@ -280,7 +353,7 @@ struct RoomActionsWidget: Widget {
       RoomWidgetView(entry: entry)
     }
     .configurationDisplayName("Room")
-    .description("Live AC and light state, with arrive and leave scenes.")
+    .description("Live AC, fan and light state, with arrive and leave scenes.")
     .supportedFamilies([.systemSmall, .systemMedium])
     // WidgetKit adds its own content margins on top of whatever the view sets.
     // Those cost roughly 16pt a side, which shrank the medium tiles enough to

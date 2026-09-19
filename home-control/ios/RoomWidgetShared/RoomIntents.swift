@@ -299,6 +299,60 @@ struct SetFanSpeedIntent: AppIntent {
   }
 }
 
+// MARK: - Fan and tube light
+
+@available(iOS 16.0, *)
+struct FanOnIntent: AppIntent {
+  static let title: LocalizedStringResource = "Turn Fan On"
+  static let openAppWhenRun = false
+  static let isDiscoverable = true
+
+  func perform() async throws -> some IntentResult {
+    try await RoomController.shared.setFan(true)
+    RoomIntentSupport.reloadWidget()
+    return .result()
+  }
+}
+
+@available(iOS 16.0, *)
+struct FanOffIntent: AppIntent {
+  static let title: LocalizedStringResource = "Turn Fan Off"
+  static let openAppWhenRun = false
+  static let isDiscoverable = true
+
+  func perform() async throws -> some IntentResult {
+    try await RoomController.shared.setFan(false)
+    RoomIntentSupport.reloadWidget()
+    return .result()
+  }
+}
+
+@available(iOS 16.0, *)
+struct TubeOnIntent: AppIntent {
+  static let title: LocalizedStringResource = "Turn Tube Light On"
+  static let openAppWhenRun = false
+  static let isDiscoverable = true
+
+  func perform() async throws -> some IntentResult {
+    try await RoomController.shared.setTube(true)
+    RoomIntentSupport.reloadWidget()
+    return .result()
+  }
+}
+
+@available(iOS 16.0, *)
+struct TubeOffIntent: AppIntent {
+  static let title: LocalizedStringResource = "Turn Tube Light Off"
+  static let openAppWhenRun = false
+  static let isDiscoverable = true
+
+  func perform() async throws -> some IntentResult {
+    try await RoomController.shared.setTube(false)
+    RoomIntentSupport.reloadWidget()
+    return .result()
+  }
+}
+
 // MARK: - Lights
 
 @available(iOS 16.0, *)

@@ -154,6 +154,66 @@ struct RoomDomainTests {
       WizReading(isOn: true, brightness: nil),
     ])?.brightness == nil)
 
+    // MARK: - Switchboard: fan and tube
+
+    section("switchboard: what the widget shows")
+    check("unknown fan renders an em dash", RoomSnapshot.unknown.fanReading.text == "—")
+    check("unknown tube renders an em dash", RoomSnapshot.unknown.tubeReading.text == "—")
+    check("unknown fan is not tappable-as-off", RoomSnapshot.unknown.fanReading.isOn == false)
+
+    var board = RoomSnapshot.unknown
+    board.node = NodeState(tube: false, fan: true)
+    check("a running fan renders On", board.fanReading.text == "On")
+    check("a running fan is tappable-as-off", board.fanReading.isOn)
+    check("a dark tube renders Off", board.tubeReading.text == "Off")
+
+    var half = RoomSnapshot.unknown
+    half.node = NodeState(tube: true, fan: nil)
+    check("a known tube stays known", half.tubeReading.isOn)
+    check("an unknown fan stays unknown", half.fanReading.text == "—")
+
+    section("switchboard: persistence")
+    let old = try JSONDecoder().decode(RoomSnapshot.self, from: Data(#"{"lights":{}}"#.utf8))
+    check("a snapshot saved before the switchboard still loads", old.node == nil)
+
+    var withNode = RoomSnapshot.unknown
+    withNode.node = NodeState(tube: true, fan: false)
+    let nodeRoundTrip = try JSONDecoder().decode(RoomSnapshot.self, from: JSONEncoder().encode(withNode))
+    check("the node survives a round trip", nodeRoundTrip.node == NodeState(tube: true, fan: false))
+
+    var refreshed = withNode
+    refreshed.apply(NodeState(tube: nil, fan: true))
+    check("a reading fills only what it reports", refreshed.node == NodeState(tube: true, fan: true))
+    var fresh = RoomSnapshot.unknown
+    fresh.apply(NodeState(tube: false, fan: nil))
+    check("a first reading can be partial", fresh.node == NodeState(tube: false, fan: nil))
+
+    section("switchboard: commands and Tuya replies")
+    check("switch_1 is the tube light", NodeSwitch.tube.rawValue == "switch_1")
+    check("switch_2 is the fan", NodeSwitch.fan.rawValue == "switch_2")
+    check("only what changed is sent", RoomConfig.nodeCommands(tube: true) == [.init(code: "switch_1", value: true)])
+    check("the fan maps to switch_2", RoomConfig.nodeCommands(fan: false) == [.init(code: "switch_2", value: false)])
+    check("both go in one command, tube first",
+          RoomConfig.nodeCommands(tube: false, fan: false)
+            == [.init(code: "switch_1", value: false), .init(code: "switch_2", value: false)])
+    check("nothing to change sends nothing", RoomConfig.nodeCommands().isEmpty)
+
+    check("a reply reads both switches", NodeState(online: true, datapoints: [
+      ("switch_1", true), ("switch_2", false), ("countdown_1", nil),
+    ]) == NodeState(tube: true, fan: false))
+    check("an offline node reports nothing", NodeState(online: false, datapoints: [
+      ("switch_1", true), ("switch_2", true),
+    ]) == nil)
+    check("a reply without switches reports nothing", NodeState(online: true, datapoints: [
+      ("countdown_1", nil),
+    ]) == nil)
+    check("a missing switch stays unknown", NodeState(online: true, datapoints: [
+      ("switch_2", true),
+    ]) == NodeState(tube: nil, fan: true))
+    check("online unspecified is trusted", NodeState(online: nil, datapoints: [
+      ("switch_1", false),
+    ]) == NodeState(tube: false, fan: nil))
+
     print("\n\(checks - failures)/\(checks) passed")
     if failures > 0 {
       print("\(failures) FAILED")

@@ -9,6 +9,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+import { applyFont } from '../fonts';
 import { mixHex } from '../roomDomain';
 import { theme } from '../theme';
 
@@ -325,7 +326,7 @@ export function MergeButton({
   );
 }
 
-export const ui = StyleSheet.create({
+export const ui = applyFont(StyleSheet.create({
   tile: {
     borderRadius: theme.radius,
     borderWidth: 1,
@@ -555,4 +556,4 @@ export const ui = StyleSheet.create({
   mergeCircleBack: {
     left: 8,
   },
-});
+}));

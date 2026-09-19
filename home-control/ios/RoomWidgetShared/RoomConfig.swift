@@ -14,6 +14,39 @@ struct TuyaConfig: Sendable {
   let apiBaseURL: URL
   let infraredID: String
   let acRemoteID: String
+  /// The two-relay switchboard, reached through the same cloud project.
+  let nodeID: String
+}
+
+/// The switchboard's relays, by Tuya datapoint code. Mirrors NODE_SWITCH in
+/// app/roomDomain.ts.
+enum NodeSwitch: String, CaseIterable, Sendable {
+  case tube = "switch_1"
+  case fan = "switch_2"
+}
+
+struct NodeCommand: Codable, Sendable, Equatable {
+  let code: String
+  let value: Bool
+}
+
+extension NodeState {
+  /// Reads a Tuya device reply. An offline node reports nothing, because what
+  /// the cloud last remembers is not what the relays are doing now; a switch
+  /// the reply omits stays unknown rather than defaulting to off.
+  init?(online: Bool?, datapoints: [(code: String, value: Bool?)]) {
+    guard online != false else { return nil }
+
+    func read(_ node: NodeSwitch) -> Bool? {
+      datapoints.first { $0.code == node.rawValue }?.value
+    }
+
+    let tube = read(.tube)
+    let fan = read(.fan)
+    guard tube != nil || fan != nil else { return nil }
+
+    self.init(tube: tube, fan: fan)
+  }
 }
 
 struct AcScene: Codable, Sendable, Equatable {
@@ -114,8 +147,17 @@ enum RoomConfig {
     clientSecret: RoomSecrets.clientSecret,
     apiBaseURL: URL(string: RoomSecrets.apiBaseUrl) ?? URL(string: "https://openapi.tuyain.com")!,
     infraredID: RoomSecrets.infraredId,
-    acRemoteID: RoomSecrets.acRemoteId
+    acRemoteID: RoomSecrets.acRemoteId,
+    nodeID: RoomDevices.nodeID
   )
+
+  /// Only what changed is sent: a tube command must not touch the fan.
+  static func nodeCommands(tube: Bool? = nil, fan: Bool? = nil) -> [NodeCommand] {
+    var commands: [NodeCommand] = []
+    if let tube { commands.append(NodeCommand(code: NodeSwitch.tube.rawValue, value: tube)) }
+    if let fan { commands.append(NodeCommand(code: NodeSwitch.fan.rawValue, value: fan)) }
+    return commands
+  }
 
   static let enterScene = AcScene(power: 1, mode: 0, temp: 27, wind: 1)
   static let leaveScene = AcScene(power: 0, mode: 0, temp: 27, wind: 1)

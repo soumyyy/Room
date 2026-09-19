@@ -1,6 +1,8 @@
 import { Platform, StyleSheet } from 'react-native';
 
-export const styles = StyleSheet.create({
+import { applyFont } from './fonts';
+
+export const styles = applyFont(StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#000000',
@@ -637,4 +639,4 @@ export const styles = StyleSheet.create({
   disabled: {
     opacity: 0.32,
   },
-});
+}));

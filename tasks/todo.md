@@ -284,3 +284,23 @@ The saved room state is still in memory only, so a killed app restores nothing o
 - Enter restores only what was on, then clears the saved state.
 - Reopening the app while out restores "away" and what to bring back.
 - Enter room is a sand tint like the lit tiles; wine is gone from the app.
+
+## Medium widget: Fan and Tube (built, on device)
+
+- [x] Layout: Enter over Leave | AC over Fan (equal halves, so Fan is exactly Leave's height) |
+      tall Lights over a thin Tube bar with the app's vertical rounded-bar icon
+- [x] Data: `NodeState` in the snapshot (optional, so old files load), `RoomConfig.nodeCommands`,
+      `NodeState(online:datapoints:)`, `TuyaClient.fetchNode/sendNodeCommands`, `RoomController.setFan/setTube`
+- [x] Intents: `FanOn/Off`, `TubeOn/Off`; Leave also switches the switchboard off (non-fatal if it is offline)
+- [x] App records fan/tube into the shared snapshot (`RoomSnapshotBridge.recordNode`)
+- [x] Medium corners 10 (was 15) on every button incl. Enter/Leave; medium text a little smaller
+- [ ] Small widget and the Mac widget still show AC + Lights only
+- [ ] Enter (widget) does not touch fan/tube: it has no saved state to restore
+
+## Manrope
+- [x] `app/fonts.ts` maps each style's fontWeight to a per-weight file; applied to all three style sheets;
+      `App.js` holds the first frame until fonts load. The widget still uses the system font.
+
+## AC does not start after Enter room (open)
+Trace shows the app sends `{power:1,...}` and the cloud accepts and reports power 1, so the app side is
+correct; the infrared signal is what fails. Needs an observation from the user (see chat).

@@ -22,11 +22,27 @@ actor RoomController {
   func leaveRoom() async throws {
     async let acTask: Void = TuyaClient.shared.sendACScene(RoomConfig.leaveScene)
     async let lightsTask: Void = WiZClient.shared.apply(RoomConfig.leaveLights, to: RoomConfig.bulbs)
+    // The switchboard is a third leg that must not sink the other two: an
+    // unreachable node should not stop the AC and lights from switching off.
+    async let boardTask: Bool = switchBoardOff()
     _ = try await (acTask, lightsTask)
+    let boardOff = await boardTask
 
     record {
       $0.ac = RoomConfig.leaveScene
       $0.setLights(.init(isOn: false), forGroups: RoomConfig.lightGroupIDs)
+      if boardOff {
+        $0.apply(NodeState(tube: false, fan: false))
+      }
+    }
+  }
+
+  private func switchBoardOff() async -> Bool {
+    do {
+      try await TuyaClient.shared.sendNodeCommands(RoomConfig.nodeCommands(tube: false, fan: false))
+      return true
+    } catch {
+      return false
     }
   }
 
@@ -80,6 +96,18 @@ actor RoomController {
   @discardableResult
   func setFanSpeed(_ wind: Int) async throws -> AcScene {
     try await amendScene { $0.with(wind: wind) }
+  }
+
+  // MARK: - Switchboard
+
+  func setTube(_ on: Bool) async throws {
+    try await TuyaClient.shared.sendNodeCommands(RoomConfig.nodeCommands(tube: on))
+    record { $0.apply(NodeState(tube: on, fan: nil)) }
+  }
+
+  func setFan(_ on: Bool) async throws {
+    try await TuyaClient.shared.sendNodeCommands(RoomConfig.nodeCommands(fan: on))
+    record { $0.apply(NodeState(tube: nil, fan: on)) }
   }
 
   // MARK: - Lights
@@ -147,13 +175,19 @@ actor RoomController {
   func refresh() async -> RoomSnapshot {
     async let scene = try? TuyaClient.shared.fetchACScene()
     async let groups = WiZClient.shared.readGroupStates()
+    async let board = try? TuyaClient.shared.fetchNode()
 
     let resolvedScene = await scene
     let resolvedGroups = await groups
+    let resolvedBoard = await board
 
     record { snapshot in
       if let resolvedScene {
         snapshot.ac = resolvedScene
+      }
+
+      if let resolvedBoard {
+        snapshot.apply(resolvedBoard)
       }
 
       for (id, reading) in resolvedGroups {

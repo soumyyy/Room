@@ -16,6 +16,7 @@ type RoomSnapshotBridge = {
   recordAC(power: number, mode: number, temp: number, wind: number): void;
   readAway(): Promise<unknown>;
   saveAway(json: string | null): void;
+  recordNode(tube: boolean, fan: boolean): void;
   recordLights(payload: {
     groups: string[];
     isOn: boolean;
@@ -69,6 +70,19 @@ export function recordAcScene(scene: {
 
   try {
     bridge!.recordAC(scene.power, scene.mode, scene.temp, scene.wind);
+  } catch {
+    // Widget state is best-effort.
+  }
+}
+
+/** Mirrors the switchboard's relays into the shared snapshot for the widget. */
+export function recordNodeState(tube: boolean, fan: boolean) {
+  if (typeof bridge?.recordNode !== 'function') {
+    return;
+  }
+
+  try {
+    bridge.recordNode(tube, fan);
   } catch {
     // Widget state is best-effort.
   }
