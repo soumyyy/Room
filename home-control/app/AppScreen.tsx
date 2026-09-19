@@ -7,23 +7,46 @@ import {
   AppState,
   Modal,
   Pressable,
-  ScrollView,
+  StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 
-import BrightnessSlider from './components/BrightnessSlider';
 import ColorSheet from './components/ColorSheet';
+import {
+  CycleButton,
+  FanGlyph,
+  MergeButton,
+  PowerButton,
+  Segmented,
+  StepButton,
+  Temperature,
+  Tile,
+  TubeGlyph,
+  ui,
+} from './components/RoomUi';
+import { clamp, theme } from './theme';
 import { BULB_GROUPS, BULBS, type BulbConfig, type BulbGroupConfig } from './config';
 import {
   ALL_LIGHTS_GROUP,
+  MODE_CYCLE,
+  WIND_CYCLE,
+  combinedColorId,
+  cyclePosition,
+  lightPanel,
+  mixHex,
+  nextMode,
+  nextWind,
+  parseAwayState,
+  revertNodeChange,
+  presetForTemp,
+  windLabel,
   COLOR_ROWS,
   COLOR_ROW_SIZE,
   DEFAULT_BULB_BRIGHTNESS,
-  FAN_OPTIONS,
   GROUP_COLOR_PRESETS,
   INITIAL_SCENE,
-  MODE_OPTIONS,
   PRESETS,
   WHITE_PRESETS,
   bulbsForGroup,
@@ -31,26 +54,51 @@ import {
   clampBrightness,
   clampTemp,
   createBulbState,
+  createNodeState,
   colorsFromSnapshot,
   createPreviewStatuses,
   groupIdsFor,
+  isNodeConfigured,
   isTuyaConfigured,
   mergeBulbStatuses,
+  mergeNodeStatus,
   modeLabel,
+  nodeCommands,
   normalizeStatus,
   sceneEquals,
   sceneFromSnapshot,
   sceneToPayload,
   type AcScene,
+  type AwayState,
   type BulbState,
   type GroupColorPreset,
+  type LightPanel,
+  type NodeChange,
+  type NodeState,
 } from './roomDomain';
-import { readRoomSnapshot, recordAcScene, recordLightCommand } from './roomSnapshot';
-import { getAcStatus, sendAcScene } from './tuya';
+import {
+  readAwayState,
+  readRoomSnapshot,
+  recordAcScene,
+  recordLightCommand,
+  saveAwayState,
+} from './roomSnapshot';
+import { getAcStatus, getNodeDevice, sendAcScene, sendNodeCommands } from './tuya';
 import { getWizStatuses, isUsingDirectWiz, sendWizCommand, type WizPilotStatus } from './wizClient';
 import { styles } from './styles';
 
 const DEV_LIGHT_UI_PREVIEW = __DEV__;
+
+/** How long the Tuya cloud takes to report a relay's new state after a command. */
+const NODE_SETTLE_MS = 2000;
+
+/** The switches in `state` that are on, as a change setting them all to `value`. */
+function switchedOn(state: NodeChange, value: boolean): NodeChange {
+  return {
+    ...(state.tube ? { tube: value } : {}),
+    ...(state.fan ? { fan: value } : {}),
+  };
+}
 
 export default function AppScreen() {
   const [ac, setAc] = useState<AcScene>(INITIAL_SCENE);
@@ -63,7 +111,22 @@ export default function AppScreen() {
   const [lightsSeparated, setLightsSeparated] = useState(false);
   const [inRoom, setInRoom] = useState(true);
   const [roomBusy, setRoomBusy] = useState(false);
-  const savedRoomState = useRef<{ ac: AcScene; activeGroupIds: string[] } | null>(null);
+  const [node, setNode] = useState<NodeState>(createNodeState);
+  // The ref is the truth for taps and commands; state mirrors it for rendering.
+  // Reading state inside a handler is one render behind a fast second tap.
+  const nodeRef = useRef<NodeState>(node);
+  const nodeQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const nodeQuietUntilRef = useRef(0);
+  const nodeVerifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedRoomState = useRef<AwayState | null>(null);
+  // Mode and Airflow step through a list on each tap. The display moves at once
+  // (`draft`) and one command goes out after the taps stop, so a quick double
+  // tap never sends the value it passed through.
+  const [draft, setDraft] = useState<AcScene | null>(null);
+  const draftRef = useRef<AcScene | null>(null);
+  const cycleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const acRef = useRef(ac);
+  acRef.current = ac;
   const [toast, setToast] = useState<string | null>(null);
   const [showSplash, setShowSplash] = useState(true);
   const [colorSheetGroupId, setColorSheetGroupId] = useState<string | null>(null);
@@ -74,10 +137,12 @@ export default function AppScreen() {
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const insets = useSafeAreaInsets();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const tuyaReady = isTuyaConfigured();
   const wizDirectAvailable = isUsingDirectWiz();
   const wizReady = wizDirectAvailable || DEV_LIGHT_UI_PREVIEW;
   const acDisabled = !tuyaReady || acBusy || loadingStatus;
+  const nodeReady = isNodeConfigured();
 
   function showErrorToast(message: string) {
     if (toastTimerRef.current) {
@@ -137,6 +202,96 @@ export default function AppScreen() {
     }
   }
 
+  function updateNode(update: (current: NodeState) => NodeState) {
+    nodeRef.current = update(nodeRef.current);
+    setNode(nodeRef.current);
+  }
+
+  /**
+   * Reads the switchboard and shows what it reports, unless a command went out
+   * in the last moments: the cloud still answers with the old state then, and
+   * showing that undid the tap that had just worked.
+   */
+  async function loadNodeStatus(options?: { silent?: boolean }) {
+    if (!nodeReady) {
+      return;
+    }
+
+    if (Date.now() < nodeQuietUntilRef.current) {
+      scheduleNodeVerify();
+      return;
+    }
+
+    try {
+      const device = await getNodeDevice();
+
+      if (Date.now() < nodeQuietUntilRef.current) {
+        return;
+      }
+
+      updateNode((current) => mergeNodeStatus(current, device));
+    } catch (error) {
+      if (!options?.silent) {
+        const message = error instanceof Error ? error.message : 'Unable to reach the switchboard';
+        showErrorToast(message);
+      }
+    }
+  }
+
+  function scheduleNodeVerify() {
+    if (nodeVerifyTimerRef.current) {
+      clearTimeout(nodeVerifyTimerRef.current);
+    }
+
+    const wait = Math.max(0, nodeQuietUntilRef.current - Date.now()) + 100;
+    nodeVerifyTimerRef.current = setTimeout(() => {
+      nodeVerifyTimerRef.current = null;
+      void loadNodeStatus({ silent: true });
+    }, wait);
+  }
+
+  /**
+   * The screen changes the instant you tap, and stays changed: the command is
+   * queued behind any earlier one, so two quick taps reach the relay in order,
+   * and a command the cloud accepted needs no second read to be believed. A
+   * quiet read follows once the cloud has caught up, to catch a wall switch.
+   */
+  function submitNode(change: NodeChange): Promise<void> {
+    const commands = nodeCommands(change);
+    if (!commands.length) {
+      return Promise.resolve();
+    }
+
+    const previous = nodeRef.current;
+    updateNode((current) => ({ ...current, ...change }));
+    nodeQuietUntilRef.current = Date.now() + NODE_SETTLE_MS;
+
+    const run = async () => {
+      try {
+        const accepted = await sendNodeCommands(commands);
+
+        if (!accepted) {
+          throw new Error('Switchboard command not confirmed.');
+        }
+
+        nodeQuietUntilRef.current = Date.now() + NODE_SETTLE_MS;
+        scheduleNodeVerify();
+      } catch (error) {
+        updateNode((current) => revertNodeChange(current, change, previous));
+        const message = error instanceof Error ? error.message : 'Switchboard command failed';
+        showErrorToast(message);
+      }
+    };
+
+    const result = nodeQueueRef.current.then(run);
+    nodeQueueRef.current = result;
+    return result;
+  }
+
+  function toggleNode(key: 'tube' | 'fan') {
+    void submitNode({ [key]: !nodeRef.current[key] });
+  }
+
   async function syncGroupStatus(group: BulbGroupConfig) {
     if (!wizDirectAvailable && DEV_LIGHT_UI_PREVIEW) {
       const statuses = createPreviewStatuses(bulbsForGroup(group, bulbs));
@@ -163,9 +318,11 @@ export default function AppScreen() {
   }
 
   async function submitAcScene(nextScene: AcScene) {
-    const previous = ac;
+    const previous = acRef.current;
+    console.log('[trace] ac submit', JSON.stringify(nextScene), 'previous', JSON.stringify(previous)); // TRACE
 
     if (sceneEquals(previous, nextScene)) {
+      console.log('[trace] ac SKIPPED: scene equals what the screen already shows'); // TRACE
       return;
     }
 
@@ -174,6 +331,7 @@ export default function AppScreen() {
 
     try {
       const accepted = await sendAcScene(sceneToPayload(nextScene));
+      console.log('[trace] ac sendAcScene ->', accepted); // TRACE
 
       if (!accepted) {
         throw new Error('AC command not confirmed.');
@@ -182,6 +340,7 @@ export default function AppScreen() {
       try {
         const status = await getAcStatus();
         const confirmed = normalizeStatus(status);
+        console.log('[trace] ac readback', JSON.stringify(status), '->', JSON.stringify(confirmed)); // TRACE
         setAc(confirmed);
         recordAcScene(confirmed);
       } catch {
@@ -190,6 +349,7 @@ export default function AppScreen() {
       }
     } catch (error) {
       setAc(previous);
+      console.log('[trace] ac FAILED', error instanceof Error ? error.message : String(error)); // TRACE
       const message = error instanceof Error ? error.message : 'AC command failed';
       showErrorToast(message);
     } finally {
@@ -425,20 +585,83 @@ export default function AppScreen() {
     }
   }
 
+  /**
+   * Sends a Mode/Airflow change that is still waiting out its 0.6 s pause. Leave
+   * room must do this first: left alone, the timer would fire after the room
+   * was switched off and turn the AC straight back on.
+   */
+  async function flushPendingCycle() {
+    if (!cycleTimerRef.current) {
+      return;
+    }
+
+    clearTimeout(cycleTimerRef.current);
+    cycleTimerRef.current = null;
+    const final = draftRef.current;
+
+    if (final) {
+      await submitAcScene(final);
+    }
+
+    draftRef.current = null;
+    setDraft(null);
+  }
+
+  function cycleAc(field: 'mode' | 'wind') {
+    const base = draftRef.current ?? acRef.current;
+    const next: AcScene = {
+      ...base,
+      power: 1,
+      ...(field === 'mode' ? { mode: nextMode(base.mode) } : { wind: nextWind(base.wind) }),
+    };
+
+    draftRef.current = next;
+    setDraft(next);
+
+    if (cycleTimerRef.current) {
+      clearTimeout(cycleTimerRef.current);
+    }
+
+    cycleTimerRef.current = setTimeout(async () => {
+      cycleTimerRef.current = null;
+      const final = draftRef.current;
+
+      if (final) {
+        await submitAcScene(final);
+      }
+
+      draftRef.current = null;
+      setDraft(null);
+    }, 600);
+  }
+
   async function leaveRoom() {
     setRoomBusy(true);
-    savedRoomState.current = {
-      ac,
+    await flushPendingCycle();
+
+    const scene = acRef.current;
+    const saved: AwayState = {
+      ac: scene,
       activeGroupIds: BULB_GROUPS
         .filter((g) => bulbsForGroup(g, bulbs).some((b) => b.isOn))
         .map((g) => g.id),
+      node: { tube: nodeRef.current.tube, fan: nodeRef.current.fan },
     };
+
+    // Saved before anything is switched off, so an interruption part-way still
+    // leaves Enter room knowing what to bring back.
+    savedRoomState.current = saved;
+    saveAwayState(JSON.stringify(saved));
+    console.log('[trace] LEAVE saved', JSON.stringify(saved)); // TRACE
+
     await Promise.all([
-      ac.power ? submitAcScene({ ...ac, power: 0 }) : Promise.resolve(),
+      scene.power ? submitAcScene({ ...scene, power: 0 }) : Promise.resolve(),
+      submitNode(switchedOn(nodeRef.current, false)),
       ...BULB_GROUPS.map((g) =>
         runGroupCommand(g, (b) => ({ ...b, isOn: false }), { state: false }),
       ),
     ]);
+
     setInRoom(false);
     setRoomBusy(false);
   }
@@ -447,14 +670,20 @@ export default function AppScreen() {
     setRoomBusy(true);
     setInRoom(true);
     const saved = savedRoomState.current;
+    console.log('[trace] ENTER saved =', JSON.stringify(saved)); // TRACE
+
     if (saved) {
       await Promise.all([
         saved.ac.power ? submitAcScene(saved.ac) : Promise.resolve(),
+        submitNode(switchedOn(saved.node, true)),
         ...BULB_GROUPS
           .filter((g) => saved.activeGroupIds.includes(g.id))
           .map((g) => runGroupCommand(g, (b) => ({ ...b, isOn: true }), { state: true })),
       ]);
     }
+
+    savedRoomState.current = null;
+    saveAwayState(null);
     setRoomBusy(false);
   }
 
@@ -479,10 +708,18 @@ export default function AppScreen() {
     // have never observed still waits, because inventing a temperature would
     // be worse than a moment of splash.
     async function boot() {
-      const snapshot = await readRoomSnapshot();
+      const [snapshot, awayJson] = await Promise.all([readRoomSnapshot(), readAwayState()]);
 
       if (disposed) {
         return;
+      }
+
+      // Closed while out of the room: come back still out, and still knowing
+      // what Enter room should turn on.
+      const away = parseAwayState(awayJson);
+      if (away) {
+        savedRoomState.current = away;
+        setInRoom(false);
       }
 
       const storedScene = sceneFromSnapshot(snapshot);
@@ -498,6 +735,7 @@ export default function AppScreen() {
       }
 
       void loadBulbStatus();
+      void loadNodeStatus();
 
       if (disposed) {
         return;
@@ -529,6 +767,10 @@ export default function AppScreen() {
       if (toastTimerRef.current) {
         clearTimeout(toastTimerRef.current);
       }
+
+      if (nodeVerifyTimerRef.current) {
+        clearTimeout(nodeVerifyTimerRef.current);
+      }
     };
   }, []);
 
@@ -543,14 +785,103 @@ export default function AppScreen() {
 
       void loadStatus({ showLoader: false });
       void loadBulbStatus();
+      void loadNodeStatus();
     });
 
     return () => subscription.remove();
   }, []);
 
 
+  const shown = draft ?? ac;
+  const acOff = !ac.power;
+  const tempSize = clamp(windowHeight * 0.095, 54, 84);
+  const rowHeight = clamp(windowHeight * 0.19, 120, 190);
+  const segmentHeight = clamp(windowHeight * 0.07, 50, 60);
+  const cycleHeight = clamp(windowHeight * 0.07, 48, 60);
+  const tempAir = clamp(windowHeight * 0.016, 8, 16);
+  const tempInset = clamp(windowWidth * 0.06, 16, 30);
+  const nodeStatus = node.available === false ? 'Unavailable' : null;
+
+  function renderLightTile({
+    key,
+    title,
+    panel,
+    stacked,
+    busy,
+    disabled,
+    onPress,
+    onLongPress,
+    corner,
+  }: {
+    key: string;
+    title: string;
+    panel: LightPanel;
+    stacked: boolean;
+    busy: boolean;
+    disabled: boolean;
+    onPress: () => void;
+    onLongPress: () => void;
+    corner?: React.ReactNode;
+  }) {
+    return (
+      <Tile
+        key={key}
+        tint={panel.on ? panel.hex : null}
+        disabled={disabled}
+        busy={busy}
+        onPress={onPress}
+        onLongPress={onLongPress}
+        style={screen.lightTile}
+      >
+        <View
+          style={[
+            screen.lightDot,
+            panel.on
+              ? {
+                  backgroundColor: panel.hex,
+                  shadowColor: panel.hex,
+                  shadowOpacity: 0.85,
+                  shadowRadius: 10,
+                  shadowOffset: { width: 0, height: 0 },
+                }
+              : null,
+          ]}
+        />
+        {corner}
+        {panel.on ? (
+          <Text
+            style={[
+              screen.lightPercent,
+              stacked ? screen.lightPercentStacked : screen.lightPercentRight,
+              { fontSize: clamp(windowHeight * (stacked ? 0.046 : 0.055), 30, 50) },
+            ]}
+          >
+            {panel.brightness}%
+          </Text>
+        ) : null}
+        <Text style={[screen.lightTitle, panel.on ? screen.lightTitleOn : null]}>{title}</Text>
+        <Text
+          style={[
+            screen.lightSub,
+            panel.on ? { color: mixHex(panel.hex, '#ffffff', 0.7) } : null,
+          ]}
+        >
+          {panel.unavailable ? 'Unavailable' : panel.on ? panel.colorName : 'Off'}
+        </Text>
+      </Tile>
+    );
+  }
+
+  const combinedPanel = lightPanel(bulbs, combinedColorId(bulbs, selectedGroupColor));
+  const combinedBusy = bulbs.some((bulb) => bulb.busy);
+
   return (
-    <View style={[styles.root, { paddingTop: insets.top + 8 }]}>
+    <View
+      style={[
+        screen.root,
+        { paddingTop: insets.top + 6, paddingBottom: Math.max(insets.bottom - 16, 10) },
+      ]}
+    >
       <StatusBar style="light" />
 
       {toast ? (
@@ -561,394 +892,173 @@ export default function AppScreen() {
         </View>
       ) : null}
 
-      <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 8 }]}
-        showsVerticalScrollIndicator={false}
-      >
+      {/* ── AC: power, temperature, scene, mode and airflow ───────────── */}
+      <View style={screen.acBlock}>
+        <PowerButton
+          on={!!ac.power}
+          busy={acBusy}
+          disabled={acDisabled}
+          onPress={() => submitAcScene({ ...ac, power: ac.power ? 0 : 1 })}
+        />
 
-        {/* ── Room toggle ───────────────────────────────────────────────── */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.roomBtn,
-            inRoom ? styles.roomBtnIn : styles.roomBtnOut,
-            pressed ? styles.pressed : null,
-            roomBusy ? styles.disabled : null,
-          ]}
-          disabled={roomBusy}
-          onPress={() => (inRoom ? leaveRoom() : enterRoom())}
+        <View
+          style={[screen.tempRow, { paddingVertical: tempAir, paddingHorizontal: tempInset }]}
         >
-          {roomBusy ? (
-            <ActivityIndicator size="small" color={inRoom ? '#636366' : '#000000'} />
-          ) : (
-            <Text style={[styles.roomBtnText, inRoom ? styles.roomBtnTextIn : styles.roomBtnTextOut]}>
-              {inRoom ? 'Leave Room' : 'Enter Room'}
-            </Text>
-          )}
-        </Pressable>
-
-        {/* ── AC Hero ─────────────────────────────────────────────────── */}
-        <View style={styles.acHero}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.powerBtn,
-              ac.power ? styles.powerBtnOn : styles.powerBtnOff,
-              pressed ? styles.pressed : null,
-              acDisabled ? styles.disabled : null,
-            ]}
-            disabled={acDisabled}
-            onPress={() => submitAcScene({ ...ac, power: ac.power ? 0 : 1 })}
-          >
-            {acBusy ? (
-              <ActivityIndicator size="small" color="#ffffff" />
-            ) : (
-              <View style={styles.powerGlyph}>
-                <View style={styles.powerGlyphRing} />
-                <View
-                  style={[
-                    styles.powerGlyphCutout,
-                    ac.power ? styles.powerGlyphCutoutOn : styles.powerGlyphCutoutOff,
-                  ]}
-                />
-                <View style={styles.powerGlyphStem} />
-              </View>
-            )}
-          </Pressable>
-
-          <Animated.View
-            pointerEvents={ac.power ? 'auto' : 'none'}
-            style={[
-              styles.acTempRow,
-              {
-                opacity: acTempAnim,
-                transform: [
-                  {
-                    translateY: acTempAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [14, 0],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <Pressable
-              style={({ pressed }) => [
-                styles.stepBtn,
-                pressed ? styles.pressed : null,
-                acDisabled || ac.temp <= 16 ? styles.disabled : null,
-              ]}
-              disabled={acDisabled || ac.temp <= 16}
+          <View style={acOff ? ui.dimmed : null}>
+            <StepButton
+              label="−"
+              disabled={acDisabled || shown.temp <= 16}
               onPress={() => submitAcScene({ ...ac, power: 1, temp: clampTemp(ac.temp - 1) })}
-            >
-              <Text style={styles.stepBtnText}>−</Text>
-            </Pressable>
-
-            <View style={styles.acTempCenter}>
-              <Text style={styles.acTempValue}>{ac.temp}°</Text>
-            </View>
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.stepBtn,
-                pressed ? styles.pressed : null,
-                acDisabled || ac.temp >= 30 ? styles.disabled : null,
-              ]}
-              disabled={acDisabled || ac.temp >= 30}
+            />
+          </View>
+          <Temperature value={shown.temp} size={tempSize} dimmed={acOff} />
+          <View style={acOff ? ui.dimmed : null}>
+            <StepButton
+              label="+"
+              disabled={acDisabled || shown.temp >= 30}
               onPress={() => submitAcScene({ ...ac, power: 1, temp: clampTemp(ac.temp + 1) })}
-            >
-              <Text style={styles.stepBtnText}>+</Text>
-            </Pressable>
-          </Animated.View>
-        </View>
-
-        {/* ── Presets / Mode / Fan — dimmed when AC is off ─────────────── */}
-        <View style={[styles.acControls, !ac.power ? styles.acControlsOff : null]}>
-
-        <View style={styles.presetRail} pointerEvents={!ac.power ? 'none' : 'auto'}>
-          {PRESETS.map((preset) => (
-            <Pressable
-              key={preset.id}
-              style={({ pressed }) => [
-                styles.presetPill,
-                pressed ? styles.pressed : null,
-                acDisabled ? styles.disabled : null,
-              ]}
-              disabled={acDisabled}
-              onPress={() => submitAcScene(preset.scene)}
-            >
-              <View style={[styles.presetDot, { backgroundColor: preset.accent }]} />
-              <View>
-                <Text style={styles.presetName}>{preset.name}</Text>
-                <Text style={styles.presetMeta}>
-                  {preset.scene.temp}° · {modeLabel(preset.scene.mode)}
-                </Text>
-              </View>
-            </Pressable>
-          ))}
-        </View>
-
-        {/* ── Mode ───────────────────────────────────────────────────────── */}
-        <View style={styles.pillCard} pointerEvents={!ac.power ? 'none' : 'auto'}>
-          <View style={[styles.pillRail, styles.pillRow, styles.pillRowLast]}>
-            {MODE_OPTIONS.map((opt) => {
-              const active = ac.mode === opt.value;
-              return (
-                <Pressable
-                  key={opt.value}
-                  style={({ pressed }) => [
-                    styles.pill,
-                    active ? styles.pillActive : null,
-                    pressed ? styles.pressed : null,
-                    acDisabled ? styles.disabled : null,
-                  ]}
-                  disabled={acDisabled}
-                  onPress={() => submitAcScene({ ...ac, power: 1, mode: opt.value })}
-                >
-                  <Text style={[styles.pillText, active ? styles.pillTextActive : null]}>
-                    {opt.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            />
           </View>
         </View>
+      </View>
 
-        {/* ── Fan speed ─────────────────────────────────────────────────── */}
-        <View style={styles.pillCard} pointerEvents={!ac.power ? 'none' : 'auto'}>
-          <View style={[styles.pillRail, styles.pillRow, styles.pillRowLast]}>
-            {FAN_OPTIONS.map((opt) => {
-              const active = ac.wind === opt.value;
-              return (
-                <Pressable
-                  key={opt.value}
-                  style={({ pressed }) => [
-                    styles.pill,
-                    active ? styles.pillActive : null,
-                    pressed ? styles.pressed : null,
-                    acDisabled ? styles.disabled : null,
-                  ]}
-                  disabled={acDisabled}
-                  onPress={() => submitAcScene({ ...ac, power: 1, wind: opt.value })}
-                >
-                  <Text style={[styles.pillText, active ? styles.pillTextActive : null]}>
-                    {opt.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+      <Segmented
+        items={PRESETS.map((preset) => ({
+          id: preset.id,
+          label: preset.name,
+          sub: `${preset.scene.temp}°`,
+        }))}
+        selectedId={presetForTemp(shown.temp)?.id ?? null}
+        dimmed={acOff}
+        disabled={acDisabled}
+        height={segmentHeight}
+        onSelect={(id) => {
+          const preset = PRESETS.find((entry) => entry.id === id);
+          if (preset) {
+            void submitAcScene(preset.scene);
+          }
+        }}
+      />
+
+      <View style={screen.pair}>
+        <CycleButton
+          label="Mode"
+          value={modeLabel(shown.mode)}
+          position={cyclePosition(MODE_CYCLE, shown.mode)}
+          count={MODE_CYCLE.length}
+          height={cycleHeight}
+          dimmed={acOff}
+          disabled={acDisabled}
+          onPress={() => cycleAc('mode')}
+        />
+        <CycleButton
+          label="Airflow"
+          value={windLabel(shown.wind)}
+          position={cyclePosition(WIND_CYCLE, shown.wind)}
+          count={WIND_CYCLE.length}
+          height={cycleHeight}
+          dimmed={acOff}
+          disabled={acDisabled}
+          onPress={() => cycleAc('wind')}
+        />
+      </View>
+
+      {/* ── Fan and tube light: the switchboard relays ────────────────── */}
+      <View style={[screen.pair, { height: rowHeight }]}>
+        <Tile
+          tint={node.fan ? theme.sand : null}
+          disabled={!nodeReady || node.available === false}
+          onPress={() => toggleNode('fan')}
+          style={screen.fanTile}
+        >
+          <FanGlyph
+            color={node.fan ? theme.sand : theme.dim}
+            backdrop={node.fan ? mixHex(theme.sand, theme.panelDeep, 0.16) : theme.panel}
+          />
+          <View>
+            <Text style={[screen.deviceName, node.fan ? screen.deviceNameOn : null]}>Fan</Text>
+            <Text style={[screen.deviceSub, node.fan ? { color: theme.sand } : null]}>
+              {nodeStatus ?? (node.fan ? 'On' : 'Off')}
+            </Text>
           </View>
+        </Tile>
+
+        <Tile
+          tint={node.tube ? theme.tube : null}
+          disabled={!nodeReady || node.available === false}
+          onPress={() => toggleNode('tube')}
+          style={screen.tubeTile}
+        >
+          <TubeGlyph on={node.tube} />
+          <Text style={[screen.deviceLabelSmall, node.tube ? screen.deviceNameOn : null]}>Tube</Text>
+        </Tile>
+      </View>
+
+      {/* ── Lights: combined, or one panel per side ───────────────────── */}
+      {lightsSeparated ? (
+        <View style={screen.lightsRow}>
+          {BULB_GROUPS.map((group) => {
+            const members = bulbsForGroup(group, bulbs);
+
+            return renderLightTile({
+              key: group.id,
+              title: group.name.replace(/ lights$/i, ''),
+              panel: lightPanel(members, selectedGroupColor[group.id]),
+              stacked: true,
+              busy: members.some((bulb) => bulb.busy),
+              disabled: !wizReady,
+              onPress: () => void toggleGroupPower(group),
+              onLongPress: () => openColorSheet(group.id),
+            });
+          })}
+
+          <MergeButton
+            merged={false}
+            onPress={() => setLightsSeparated(false)}
+            style={screen.mergeSeam}
+          />
         </View>
-
-        </View>{/* end acControls */}
-
-        {/* ── Lights ────────────────────────────────────────────────────── */}
-        <View style={styles.lightsSection}>
-          <View style={styles.lightsSectionHeader}>
-            <Text style={styles.pillSectionLabel}>Lights</Text>
-            <Pressable
-              style={({ pressed }) => [
-                styles.allLightsBtn,
-                styles.lightSplitBtn,
-                pressed ? styles.pressed : null,
-              ]}
-              accessibilityLabel={lightsSeparated ? 'Combine lights' : 'Separate lights'}
-              onPress={() => setLightsSeparated((current) => !current)}
-            >
-              <View style={styles.lightSplitIcon}>
-                <View
-                  style={[
-                    styles.lightSplitIconLine,
-                    styles.lightSplitIconStem,
-                    lightsSeparated ? styles.lightSplitIconLineActive : null,
-                  ]}
-                />
-                <View
-                  style={[
-                    styles.lightSplitIconLine,
-                    styles.lightSplitIconLeft,
-                    lightsSeparated ? styles.lightSplitIconLineActive : null,
-                  ]}
-                />
-                <View
-                  style={[
-                    styles.lightSplitIconLine,
-                    styles.lightSplitIconRight,
-                    lightsSeparated ? styles.lightSplitIconLineActive : null,
-                  ]}
-                />
-                <View
-                  style={[
-                    styles.lightSplitIconDot,
-                    styles.lightSplitIconDotRoot,
-                    lightsSeparated ? styles.lightSplitIconDotActive : null,
-                  ]}
-                />
-                <View
-                  style={[
-                    styles.lightSplitIconDot,
-                    styles.lightSplitIconDotLeft,
-                    lightsSeparated ? styles.lightSplitIconDotActive : null,
-                  ]}
-                />
-                <View
-                  style={[
-                    styles.lightSplitIconDot,
-                    styles.lightSplitIconDotRight,
-                    lightsSeparated ? styles.lightSplitIconDotActive : null,
-                  ]}
-                />
-              </View>
-            </Pressable>
-          </View>
-
-          {lightsSeparated ? (
-            <View style={styles.lightGrid}>
-              {BULB_GROUPS.map((group) => {
-                const members = bulbsForGroup(group, bulbs);
-                const anyOn = members.some((b) => b.isOn);
-                const groupBusy = members.some((b) => b.busy);
-                const groupUnavailable =
-                  members.length > 0 && members.every((b) => b.available === false);
-                const activeColorId = selectedGroupColor[group.id] ?? 'warm-white';
-                const activePreset = GROUP_COLOR_PRESETS.find((p) => p.id === activeColorId);
-                const availableMembers = members.filter((b) => b.available !== false);
-                const avgBrightness = availableMembers.length
-                  ? Math.round(
-                      availableMembers.reduce((s, b) => s + b.brightness, 0) /
-                        availableMembers.length,
-                    )
-                  : DEFAULT_BULB_BRIGHTNESS;
-
-                return (
-                  <Pressable
-                    key={group.id}
-                    style={({ pressed }) => [
-                      styles.lightTile,
-                      anyOn ? styles.lightTileOn : styles.lightTileOff,
-                      pressed ? styles.lightTilePressed : null,
-                      groupBusy || groupUnavailable || !wizReady ? styles.disabled : null,
-                    ]}
-                    onPress={() => void toggleGroupPower(group)}
-                    onLongPress={() => openColorSheet(group.id)}
-                    delayLongPress={380}
-                    disabled={groupBusy || groupUnavailable || !wizReady}
-                  >
-                    {groupBusy ? (
-                      <ActivityIndicator
-                        size="small"
-                        color={anyOn ? '#ff9f0a' : '#48484a'}
-                        style={styles.lightTileSpinner}
-                      />
-                    ) : (
-                      <>
-                        <View style={styles.lightTileTop}>
-                          <View
-                            style={[
-                              styles.lightTileDot,
-                              anyOn
-                                ? {
-                                    backgroundColor: activePreset?.hex ?? '#ffcc70',
-                                    shadowColor: activePreset?.hex ?? '#ffcc70',
-                                    shadowOpacity: 0.85,
-                                    shadowRadius: 14,
-                                    shadowOffset: { width: 0, height: 0 },
-                                  }
-                                : styles.lightTileDotOff,
-                            ]}
-                          />
-                        </View>
-                        <Text
-                          style={[styles.lightTileName, anyOn ? styles.lightTileNameOn : null]}
-                        >
-                          {group.name}
-                        </Text>
-                        <Text style={styles.lightTileStatus}>
-                          {groupUnavailable ? `${group.name} unavailable` : anyOn ? `${avgBrightness}%` : 'Off'}
-                        </Text>
-                      </>
-                    )}
-                  </Pressable>
-                );
-              })}
-            </View>
-          ) : (
-            (() => {
-              const anyOn = bulbs.some((b) => b.isOn);
-              const lightsBusy = bulbs.some((b) => b.busy);
-              const unavailableGroups = BULB_GROUPS.filter((group) => {
-                const members = bulbsForGroup(group, bulbs);
-                return members.length > 0 && members.every((b) => b.available === false);
-              });
-              const allUnavailable =
-                bulbs.length > 0 && bulbs.every((b) => b.available === false);
-              const activeGroup =
-                BULB_GROUPS.find((group) => bulbsForGroup(group, bulbs).some((b) => b.isOn)) ??
-                BULB_GROUPS[0];
-              const activeColorId = selectedGroupColor[activeGroup.id] ?? 'warm-white';
-              const activePreset = GROUP_COLOR_PRESETS.find((p) => p.id === activeColorId);
-              const availableBulbs = bulbs.filter((b) => b.available !== false);
-              const avgBrightness = availableBulbs.length
-                ? Math.round(
-                    availableBulbs.reduce((s, b) => s + b.brightness, 0) / availableBulbs.length,
-                  )
-                : DEFAULT_BULB_BRIGHTNESS;
-              const unavailableText = unavailableGroups
-                .map((group) => `${group.name} unavailable`)
-                .join(' · ');
-
-              return (
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.lightTile,
-                    styles.lightTileCombined,
-                    anyOn ? styles.lightTileOn : styles.lightTileOff,
-                    pressed ? styles.lightTilePressed : null,
-                    lightsBusy || allUnavailable || !wizReady ? styles.disabled : null,
-                  ]}
-                  onPress={() => void toggleAllLightsPower()}
-                  onLongPress={() => openColorSheet(ALL_LIGHTS_GROUP.id)}
-                  delayLongPress={380}
-                  disabled={lightsBusy || allUnavailable || !wizReady}
-                >
-                  {lightsBusy ? (
-                    <ActivityIndicator
-                      size="small"
-                      color={anyOn ? '#ff9f0a' : '#48484a'}
-                      style={styles.lightTileSpinner}
-                    />
-                  ) : (
-                    <>
-                      <View style={styles.lightTileTop}>
-                        <View
-                          style={[
-                            styles.lightTileDot,
-                            anyOn
-                              ? {
-                                  backgroundColor: activePreset?.hex ?? '#ffcc70',
-                                  shadowColor: activePreset?.hex ?? '#ffcc70',
-                                  shadowOpacity: 0.85,
-                                  shadowRadius: 14,
-                                  shadowOffset: { width: 0, height: 0 },
-                                }
-                              : styles.lightTileDotOff,
-                          ]}
-                        />
-                      </View>
-                      <Text style={[styles.lightTileName, anyOn ? styles.lightTileNameOn : null]}>
-                        Lights
-                      </Text>
-                      <Text style={styles.lightTileStatus}>
-                        {unavailableText || (anyOn ? `${avgBrightness}%` : 'Off')}
-                      </Text>
-                    </>
-                  )}
-                </Pressable>
-              );
-            })()
-          )}
+      ) : (
+        <View style={screen.lightsRow}>
+          {renderLightTile({
+            key: 'all',
+            title: 'Lights',
+            panel: combinedPanel,
+            stacked: false,
+            busy: combinedBusy,
+            disabled: !wizReady,
+            onPress: () => void toggleAllLightsPower(),
+            onLongPress: () => openColorSheet(ALL_LIGHTS_GROUP.id),
+            corner: (
+              <MergeButton
+                merged
+                onPress={() => setLightsSeparated(true)}
+                style={screen.mergeCorner}
+              />
+            ),
+          })}
         </View>
+      )}
 
-      </ScrollView>
+      {/* ── Room ──────────────────────────────────────────────────────── */}
+      <Pressable
+        disabled={roomBusy}
+        onPress={() => (inRoom ? leaveRoom() : enterRoom())}
+        style={({ pressed }) => [
+          screen.roomButton,
+          inRoom ? null : screen.roomButtonEnter,
+          pressed ? ui.tilePressed : null,
+          roomBusy ? ui.disabled : null,
+        ]}
+      >
+        {roomBusy ? (
+          <ActivityIndicator size="small" color={theme.strong} />
+        ) : (
+          <Text style={[screen.roomText, inRoom ? null : screen.roomTextEnter]}>
+            {inRoom ? 'Leave room' : 'Enter room'}
+          </Text>
+        )}
+      </Pressable>
 
       <ColorSheet
         group={sheetGroup}
@@ -977,3 +1087,138 @@ export default function AppScreen() {
     </View>
   );
 }
+
+const screen = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: theme.bg,
+    paddingHorizontal: theme.padding,
+    gap: theme.gap,
+  },
+  acBlock: {
+    alignItems: 'center',
+    gap: theme.gap,
+  },
+  tempRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    alignSelf: 'stretch',
+  },
+  pair: {
+    flexDirection: 'row',
+    gap: theme.gap,
+  },
+  fanTile: {
+    flex: 1,
+    padding: 16,
+    justifyContent: 'space-between',
+  },
+  tubeTile: {
+    width: 84,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 14,
+    paddingBottom: 12,
+  },
+  deviceName: {
+    color: theme.mute,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  deviceNameOn: {
+    color: theme.strong,
+  },
+  deviceSub: {
+    color: theme.dim,
+    fontSize: 12,
+    marginTop: 1,
+  },
+  deviceLabelSmall: {
+    color: theme.mute,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  lightsRow: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: theme.gap,
+  },
+  lightTile: {
+    flex: 1,
+  },
+  lightDot: {
+    position: 'absolute',
+    left: 16,
+    top: 16,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#2a2a2a',
+  },
+  lightTitle: {
+    position: 'absolute',
+    left: 16,
+    bottom: 36,
+    color: theme.dim,
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  lightTitleOn: {
+    color: '#ffffff',
+  },
+  lightSub: {
+    position: 'absolute',
+    left: 16,
+    bottom: 15,
+    color: theme.dim,
+    fontSize: 13,
+  },
+  lightPercent: {
+    position: 'absolute',
+    color: '#ffffff',
+    fontWeight: '300',
+    letterSpacing: -1.5,
+  },
+  lightPercentRight: {
+    right: 16,
+    bottom: 12,
+  },
+  lightPercentStacked: {
+    left: 16,
+    bottom: 62,
+  },
+  mergeCorner: {
+    position: 'absolute',
+    top: 10,
+    right: 12,
+  },
+  mergeSeam: {
+    position: 'absolute',
+    left: '50%',
+    top: '50%',
+    marginLeft: -20,
+    marginTop: -20,
+  },
+  roomButton: {
+    height: 63,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: theme.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  roomButtonEnter: {
+    backgroundColor: theme.fade,
+    borderColor: theme.fade,
+  },
+  roomText: {
+    color: theme.text,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  roomTextEnter: {
+    color: '#0d0d0d',
+    fontWeight: '700',
+  },
+});

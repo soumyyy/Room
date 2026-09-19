@@ -1,6 +1,7 @@
 import {
   BULBS_GENERATED,
   BULB_GROUPS_GENERATED,
+  NODE_GENERATED,
   TUYA_SECRETS,
 } from './config.generated';
 
@@ -16,6 +17,12 @@ export interface BulbGroupConfig {
   bulbIds: string[];
 }
 
+/** The Tuya switchboard: switch_1 is the tube light, switch_2 the fan. */
+export interface NodeConfig {
+  id: string;
+  name: string;
+}
+
 export interface TuyaCloudConfig {
   infraredId: string;
   acRemoteId: string;
@@ -28,6 +35,8 @@ export interface TuyaCloudConfig {
 export const BULBS: BulbConfig[] = BULBS_GENERATED;
 
 export const BULB_GROUPS: BulbGroupConfig[] = BULB_GROUPS_GENERATED;
+
+export const NODE: NodeConfig = NODE_GENERATED;
 
 // ── Tuya cloud AC control on-device ────────────────────────────────────────
 export const TUYA_CLOUD: TuyaCloudConfig = {

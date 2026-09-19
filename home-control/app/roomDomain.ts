@@ -6,6 +6,7 @@
 import {
   BULB_GROUPS,
   BULBS,
+  NODE,
   TUYA_CLOUD,
   type BulbConfig,
   type BulbGroupConfig,
@@ -39,6 +40,23 @@ export type BulbState = BulbConfig & {
   busy: boolean;
 };
 
+/** The switchboard reports each relay as a Tuya datapoint; these are its codes. */
+export const NODE_SWITCH = { tube: 'switch_1', fan: 'switch_2' } as const;
+
+export type NodeState = {
+  available: boolean | null;
+  tube: boolean;
+  fan: boolean;
+  busy: boolean;
+};
+
+export type NodeDevice = {
+  online: boolean;
+  status: Array<{ code: string; value: unknown }>;
+};
+
+export type NodeChange = Partial<Pick<NodeState, 'tube' | 'fan'>>;
+
 export type GroupColorPreset = {
   id: string;
   hex: string;
@@ -67,7 +85,7 @@ export const MODE_OPTIONS: Array<{ value: ModeValue; label: string }> = [
 export const FAN_OPTIONS: Array<{ value: WindValue; label: string }> = [
   { value: 0, label: 'Auto' },
   { value: 1, label: 'Low' },
-  { value: 2, label: 'Mid' },
+  { value: 2, label: 'Medium' },
   { value: 3, label: 'High' },
 ];
 
@@ -211,6 +229,81 @@ export const COLOR_ROWS = Array.from(
   (_, row) => COLOR_PRESETS.slice(row * COLOR_ROW_SIZE, (row + 1) * COLOR_ROW_SIZE),
 );
 
+export const MODE_CYCLE: ModeValue[] = MODE_OPTIONS.map((option) => option.value);
+export const WIND_CYCLE: WindValue[] = FAN_OPTIONS.map((option) => option.value);
+
+/** The value after `value`, wrapping; anything not in the list re-enters at the first. */
+function step<T>(list: T[], value: T): T {
+  return list[(list.indexOf(value) + 1) % list.length];
+}
+
+export function nextMode(mode: ModeValue): ModeValue {
+  return step(MODE_CYCLE, mode);
+}
+
+export function nextWind(wind: WindValue): WindValue {
+  return step(WIND_CYCLE, wind);
+}
+
+export function cyclePosition<T>(list: T[], value: T) {
+  return Math.max(0, list.indexOf(value));
+}
+
+/** Ice, Day and Night are told apart by the temperature they set. */
+export function presetForTemp(temp: number): Preset | null {
+  return PRESETS.find((preset) => preset.scene.temp === temp) ?? null;
+}
+
+/** `ratio` of `color` over `base`, as a hex string; React Native has no color-mix. */
+export function mixHex(color: string, base: string, ratio: number) {
+  const channels = (hex: string) =>
+    [1, 3, 5].map((index) => parseInt(hex.slice(index, index + 2), 16));
+  const [c, b] = [channels(color), channels(base)];
+  return `#${c
+    .map((value, index) =>
+      Math.round(b[index] + (value - b[index]) * ratio)
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`;
+}
+
+export type LightPanel = {
+  on: boolean;
+  unavailable: boolean;
+  brightness: number;
+  hex: string;
+  colorName: string;
+};
+
+/** What a lights panel shows: lit state, average brightness, and the chosen colour. */
+export function lightPanel(members: BulbState[], colorId: string | undefined): LightPanel {
+  const preset =
+    GROUP_COLOR_PRESETS.find((entry) => entry.id === (colorId ?? 'warm-white')) ??
+    GROUP_COLOR_PRESETS[0];
+  const reachable = members.filter((bulb) => bulb.available !== false);
+  const lit = reachable.filter((bulb) => bulb.isOn);
+  const basis = lit.length ? lit : reachable;
+
+  return {
+    on: lit.length > 0,
+    unavailable: members.length > 0 && reachable.length === 0,
+    brightness: basis.length
+      ? Math.round(basis.reduce((sum, bulb) => sum + bulb.brightness, 0) / basis.length)
+      : DEFAULT_BULB_BRIGHTNESS,
+    hex: preset.hex,
+    colorName: preset.name,
+  };
+}
+
+/** The combined panel wears the colour of whichever group is lit, else the first. */
+export function combinedColorId(bulbs: BulbState[], colors: Record<string, string>) {
+  const active =
+    BULB_GROUPS.find((group) => bulbsForGroup(group, bulbs).some((bulb) => bulb.isOn)) ??
+    BULB_GROUPS[0];
+  return colors[active.id] ?? 'warm-white';
+}
+
 export function isTuyaConfigured() {
   return [
     TUYA_CLOUD.clientId,
@@ -218,6 +311,15 @@ export function isTuyaConfigured() {
     TUYA_CLOUD.infraredId,
     TUYA_CLOUD.acRemoteId,
     TUYA_CLOUD.apiBaseUrl,
+  ].every((value) => value.length > 0);
+}
+
+export function isNodeConfigured() {
+  return [
+    TUYA_CLOUD.clientId,
+    TUYA_CLOUD.clientSecret,
+    TUYA_CLOUD.apiBaseUrl,
+    NODE.id,
   ].every((value) => value.length > 0);
 }
 
@@ -290,6 +392,49 @@ export function createBulbState(bulb: BulbConfig): BulbState {
   };
 }
 
+export function createNodeState(): NodeState {
+  return { available: null, tube: false, fan: false, busy: false };
+}
+
+/** A switch the device did not report keeps its last known value. */
+export function mergeNodeStatus(current: NodeState, device: NodeDevice): NodeState {
+  const read = (code: string, fallback: boolean) => {
+    const value = device.status.find((entry) => entry.code === code)?.value;
+    return typeof value === 'boolean' ? value : fallback;
+  };
+
+  return {
+    ...current,
+    available: device.online,
+    tube: read(NODE_SWITCH.tube, current.tube),
+    fan: read(NODE_SWITCH.fan, current.fan),
+    busy: false,
+  };
+}
+
+/**
+ * After a rejected command: put back the switches it changed, but only those
+ * still showing the value it tried to set. A newer tap that already moved a
+ * switch must not be undone by an older failure.
+ */
+export function revertNodeChange(
+  current: NodeState,
+  change: NodeChange,
+  previous: NodeState,
+): NodeState {
+  return {
+    ...current,
+    ...(change.tube !== undefined && current.tube === change.tube ? { tube: previous.tube } : {}),
+    ...(change.fan !== undefined && current.fan === change.fan ? { fan: previous.fan } : {}),
+  };
+}
+
+export function nodeCommands(change: NodeChange): Array<{ code: string; value: boolean }> {
+  return (Object.keys(NODE_SWITCH) as Array<keyof typeof NODE_SWITCH>)
+    .filter((key) => change[key] !== undefined)
+    .map((key) => ({ code: NODE_SWITCH[key], value: change[key] as boolean }));
+}
+
 export function clampBrightness(value: number) {
   return Math.max(10, Math.min(100, Math.round(value)));
 }
@@ -349,6 +494,52 @@ type StoredSnapshot = {
     { isOn: boolean; brightness?: number | null; presetID?: string | null }
   >;
 };
+
+/** What Leave room turned off, kept so Enter room can turn exactly that back on. */
+export type AwayState = {
+  ac: AcScene;
+  activeGroupIds: string[];
+  node: NodeChange;
+};
+
+/**
+ * Reads a saved away state defensively: a stale or damaged file must neither
+ * crash the screen nor turn on something the user never had on. Null means the
+ * user is not away.
+ */
+export function parseAwayState(json: string | null): AwayState | null {
+  if (!json) {
+    return null;
+  }
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(json);
+  } catch {
+    return null;
+  }
+
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+
+  const stored = raw as {
+    ac?: { power: number; mode: number; temp: number; wind: number } | null;
+    activeGroupIds?: unknown;
+    node?: { tube?: unknown; fan?: unknown } | null;
+  };
+
+  return {
+    ac: sceneFromSnapshot({ ac: stored.ac }) ?? { ...INITIAL_SCENE, power: 0 },
+    activeGroupIds: Array.isArray(stored.activeGroupIds)
+      ? stored.activeGroupIds.filter(
+          (id): id is string =>
+            typeof id === 'string' && BULB_GROUPS.some((group) => group.id === id),
+        )
+      : [],
+    node: { tube: stored.node?.tube === true, fan: stored.node?.fan === true },
+  };
+}
 
 /** Clamps a stored scene back into range; a stale file should never widen it. */
 export function sceneFromSnapshot(snapshot: StoredSnapshot | null): AcScene | null {

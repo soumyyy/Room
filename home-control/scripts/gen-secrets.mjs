@@ -52,6 +52,8 @@ const groups = (devices.groups ?? []).map((group) => ({
   bulbIds: bulbs.filter((bulb) => bulb.group === group.id).map((bulb) => bulb.id),
 }));
 
+const node = devices.node ?? { id: '', name: '' };
+
 const fromFile = readFile();
 const tuya = Object.fromEntries(
   FIELDS.map(([key, envName]) => [key, process.env[envName] ?? fromFile[key] ?? '']),
@@ -85,6 +87,8 @@ export const BULB_GROUPS_GENERATED = ${JSON.stringify(
       null,
       2,
     )};
+
+export const NODE_GENERATED = ${JSON.stringify(node, null, 2)};
 `,
   },
   {

@@ -245,3 +245,41 @@ key rotation and a signing proxy), 6–9, and the cleanup list.
 - [ ] CI: 71 assertions and a native-wiring guard exist, and nothing runs them on push.
 - [ ] Desktop and phone disagree on light presets (21 vs 15, different names).
 - [ ] A Siri phrase, and whether Seafoam/Lavender/Blush read as pastel rather than oversaturated.
+
+## Switchboard node — tube light + fan (app only)
+
+- [x] `devices.json` `node` -> `gen-secrets.mjs` -> `config.generated.ts` `NODE_GENERATED`
+- [x] `roomDomain.ts`: `NodeState`, `mergeNodeStatus`, `nodeCommands`, `isNodeConfigured` (+5 tests)
+- [x] `tuya.ts`: `getNodeDevice` (`GET /v1.0/devices/{id}`), `sendNodeCommands` (`POST .../commands`)
+- [x] `AppScreen.tsx`: Fan row under the AC controls, Tube light tile in Lights (both modes), boot and
+      foreground refresh, optimistic toggle with revert
+- [x] Enter/Leave Room: leave switches off whichever of tube/fan were on in one command; enter restores those
+- [ ] Widget, Siri, desktop and mac widget (deferred by request)
+- [ ] Not verified on a device or simulator: the screen layout and the Enter/Leave button itself
+
+### Review
+`npm test` passes (typecheck, 27 domain, 49 Swift). The real client code was run against the node:
+status read, fan flipped, read back, restored. The master Lights toggle stays WiZ-only.
+The saved room state is still in memory only, so a killed app restores nothing on Enter Room.
+
+## Room screen redesign (built)
+
+- [x] Tokens (`app/theme.ts`) and presentational parts (`app/components/RoomUi.tsx`)
+- [x] Domain: `nextMode`, `nextWind`, `cyclePosition`, `presetForTemp`, `mixHex`, `lightPanel`,
+      `combinedColorId` (+9 tests); Airflow label is now "Medium"
+- [x] Screen: power, temperature with hanging degree sign, Ice/Day/Night with temperatures, Mode and
+      Airflow cycle buttons (one command 0.6 s after the last tap), Fan and Tube, tinted Lights panel,
+      separated Left/Right panels, Leave/Enter room; fills any screen height without scrolling
+- [x] iOS 27 launch crash fixed (UIScene), `Room (Dev)` build, packager address for device builds
+- [ ] Look at it on the phone and adjust spacing
+- [x] Persist the saved room state so Enter room survives an app restart (App Group key `roomAwayState`,
+      `readAway`/`saveAway` on `RoomSnapshotBridge`, parsed defensively by `parseAwayState`)
+- [ ] Restyle the colour sheet to match
+- [ ] Widget, Siri and the desktop app
+
+### Enter / Leave room audit
+- Leave now flushes a pending Mode/Airflow change first (it used to fire after leaving and turn the AC back on),
+  reads the AC from `acRef` rather than a stale render, and saves the away state *before* switching anything off.
+- Enter restores only what was on, then clears the saved state.
+- Reopening the app while out restores "away" and what to bring back.
+- Enter room is a sand tint like the lit tiles; wine is gone from the app.

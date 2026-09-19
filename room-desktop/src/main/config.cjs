@@ -1,3 +1,9 @@
+const {
+  TUYA_SECRETS: TUYA,
+  BULBS_GENERATED,
+  BULB_GROUPS_GENERATED,
+} = require('./generated.cjs');
+
 const BULBS = BULBS_GENERATED;
 
 const BULB_GROUPS = BULB_GROUPS_GENERATED;
@@ -151,12 +157,6 @@ const LIGHT_PRESETS = [
     params: { state: true, r: 255, g: 198, b: 216 },
   },
 ];
-
-const {
-  TUYA_SECRETS: TUYA,
-  BULBS_GENERATED,
-  BULB_GROUPS_GENERATED,
-} = require('./generated.cjs');
 
 module.exports = {
   APP_NAME: 'Room',

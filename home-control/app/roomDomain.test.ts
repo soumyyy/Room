@@ -18,7 +18,22 @@ import {
   clampTemp,
   createBulbState,
   groupIdsFor,
+  isNodeConfigured,
+  MODE_CYCLE,
+  WIND_CYCLE,
+  combinedColorId,
+  cyclePosition,
+  lightPanel,
+  mixHex,
+  nextMode,
+  nextWind,
+  parseAwayState,
+  presetForTemp,
+  revertNodeChange,
   isTuyaConfigured,
+  createNodeState,
+  mergeNodeStatus,
+  nodeCommands,
   mergeBulbStatuses,
   modeLabel,
   normalizeStatus,
@@ -182,4 +197,191 @@ test('hydration: colours restore per group, defaults survive', () => {
   );
   assert.equal(colors.left, 'seafoam');
   assert.equal(colors.right, 'warm-white');
+});
+
+// ── Switchboard node ────────────────────────────────────────────────────────
+
+test('node: starts unobserved, never claiming a device is off or reachable', () => {
+  const node = createNodeState();
+  assert.equal(node.available, null);
+  assert.equal(node.busy, false);
+});
+
+test('node: switch_1 is the tube light and switch_2 is the fan', () => {
+  const node = mergeNodeStatus(createNodeState(), {
+    online: true,
+    status: [
+      { code: 'switch_1', value: true },
+      { code: 'switch_2', value: false },
+      { code: 'countdown_1', value: 0 },
+    ],
+  });
+  assert.equal(node.available, true);
+  assert.equal(node.tube, true);
+  assert.equal(node.fan, false);
+});
+
+test('node: offline is unavailable, and a status missing a switch keeps the old value', () => {
+  const seeded = { ...createNodeState(), tube: true, fan: true };
+  const node = mergeNodeStatus(seeded, { online: false, status: [{ code: 'switch_2', value: false }] });
+  assert.equal(node.available, false);
+  assert.equal(node.tube, true);
+  assert.equal(node.fan, false);
+});
+
+test('node: commands carry only what changed, mapped to switch codes', () => {
+  assert.deepEqual(nodeCommands({ tube: true }), [{ code: 'switch_1', value: true }]);
+  assert.deepEqual(nodeCommands({ fan: false }), [{ code: 'switch_2', value: false }]);
+  assert.deepEqual(nodeCommands({ tube: false, fan: false }), [
+    { code: 'switch_1', value: false },
+    { code: 'switch_2', value: false },
+  ]);
+  assert.deepEqual(nodeCommands({}), []);
+});
+
+test('node: is configured only with the Tuya credentials and a device id', () => {
+  assert.equal(typeof isNodeConfigured(), 'boolean');
+});
+
+// ── Cycling buttons, scenes and the tinted lights panel ─────────────────────
+
+test('cycle: mode steps Cool, Auto, Fan, Dry and wraps', () => {
+  assert.deepEqual(MODE_CYCLE, [0, 2, 3, 4]);
+  assert.equal(nextMode(0), 2);
+  assert.equal(nextMode(2), 3);
+  assert.equal(nextMode(3), 4);
+  assert.equal(nextMode(4), 0);
+});
+
+test('cycle: a mode outside the list (Heat) re-enters at Cool', () => {
+  assert.equal(nextMode(1), 0);
+});
+
+test('cycle: airflow steps Auto, Low, Medium, High and wraps', () => {
+  assert.deepEqual(WIND_CYCLE, [0, 1, 2, 3]);
+  assert.equal(nextWind(0), 1);
+  assert.equal(nextWind(2), 3);
+  assert.equal(nextWind(3), 0);
+  assert.equal(windLabel(2), 'Medium');
+});
+
+test('cycle: the dots show position, defaulting to the first', () => {
+  assert.equal(cyclePosition(MODE_CYCLE, 3), 2);
+  assert.equal(cyclePosition(MODE_CYCLE, 1), 0);
+});
+
+test('scenes: Ice, Day and Night are recognised by their temperature', () => {
+  assert.equal(presetForTemp(21)?.id, 'ice');
+  assert.equal(presetForTemp(24)?.id, 'daytime');
+  assert.equal(presetForTemp(27)?.id, 'night');
+  assert.equal(presetForTemp(25), null);
+});
+
+test('tint: blends a colour toward a base by a ratio', () => {
+  assert.equal(mixHex('#ff0000', '#000000', 0.5), '#800000');
+  assert.equal(mixHex('#ff0000', '#000000', 0), '#000000');
+  assert.equal(mixHex('#ff0000', '#000000', 1), '#ff0000');
+});
+
+test('lights panel: takes the chosen colour and the average brightness of lit bulbs', () => {
+  const bulbs = BULBS.map(createBulbState).map((bulb, index) => ({
+    ...bulb,
+    available: true,
+    isOn: index < 2,
+    brightness: index === 0 ? 100 : 60,
+  }));
+  const left = BULB_GROUPS[0];
+  const panel = lightPanel(bulbsForGroup(left, bulbs), 'blue');
+  assert.equal(panel.on, true);
+  assert.equal(panel.brightness, 80);
+  assert.equal(panel.hex, '#0a84ff');
+  assert.equal(panel.colorName, 'Blue');
+});
+
+test('lights panel: off, unreachable and colourless fall back honestly', () => {
+  const bulbs = BULBS.map(createBulbState);
+  const off = lightPanel(bulbs, undefined);
+  assert.equal(off.on, false);
+  assert.equal(off.colorName, 'Warm White');
+  const gone = lightPanel(bulbs.map((bulb) => ({ ...bulb, available: false })), 'red');
+  assert.equal(gone.on, false);
+  assert.equal(gone.unavailable, true);
+});
+
+test('lights panel: the combined panel follows the group that is lit', () => {
+  const bulbs = BULBS.map(createBulbState).map((bulb) => ({
+    ...bulb,
+    isOn: bulb.id.startsWith('right'),
+  }));
+  const colors = { left: 'red', right: 'purple' };
+  assert.equal(combinedColorId(bulbs, colors), 'purple');
+  assert.equal(combinedColorId(BULBS.map(createBulbState), colors), 'red');
+});
+
+// ── A rejected switchboard command puts back only what it changed ────────────
+
+test('revert: a failed command restores the switches it touched', () => {
+  const before = { ...createNodeState(), tube: false, fan: true };
+  const shown = { ...before, tube: true };
+  const after = revertNodeChange(shown, { tube: true }, before);
+  assert.equal(after.tube, false);
+  assert.equal(after.fan, true);
+});
+
+test('revert: leaves a switch alone if something newer already moved it', () => {
+  const before = { ...createNodeState(), fan: false };
+  // Fan was tapped on (failed), then tapped off again: the screen now says off.
+  const shown = { ...before, fan: false };
+  const after = revertNodeChange({ ...shown, fan: true }, { fan: false }, { ...before, fan: true });
+  assert.equal(after.fan, true);
+});
+
+test('revert: a change of both switches restores both', () => {
+  const before = { ...createNodeState(), tube: true, fan: true };
+  const shown = { ...before, tube: false, fan: false };
+  const after = revertNodeChange(shown, { tube: false, fan: false }, before);
+  assert.equal(after.tube, true);
+  assert.equal(after.fan, true);
+});
+
+// ── What Enter room restores must survive a restart ─────────────────────────
+
+test('away: a saved state round-trips through JSON', () => {
+  const saved = {
+    ac: { power: 1 as const, mode: 0 as const, temp: 24, wind: 1 as const },
+    activeGroupIds: ['left'],
+    node: { tube: true, fan: false },
+  };
+  assert.deepEqual(parseAwayState(JSON.stringify(saved)), saved);
+});
+
+test('away: nothing stored, or garbage, means the user is not away', () => {
+  assert.equal(parseAwayState(null), null);
+  assert.equal(parseAwayState(''), null);
+  assert.equal(parseAwayState('not json'), null);
+  assert.equal(parseAwayState('42'), null);
+  assert.equal(parseAwayState('null'), null);
+});
+
+test('away: a stale file cannot widen the accepted ranges or invent groups', () => {
+  const stored = JSON.stringify({
+    ac: { power: 1, mode: 99, temp: 200, wind: 7 },
+    activeGroupIds: ['left', 'attic', 42],
+    node: { tube: 'yes', fan: true },
+  });
+  const away = parseAwayState(stored);
+  assert.ok(away);
+  assert.equal(away.ac.temp, 30);
+  assert.equal(away.ac.mode, 0);
+  assert.equal(away.ac.wind, 1);
+  assert.deepEqual(away.activeGroupIds, ['left']);
+  assert.deepEqual(away.node, { tube: false, fan: true });
+});
+
+test('away: a state missing pieces restores nothing rather than guessing', () => {
+  const away = parseAwayState('{}');
+  assert.ok(away);
+  assert.equal(away.ac.power, 0);
+  assert.deepEqual(away.activeGroupIds, []);
+  assert.deepEqual(away.node, { tube: false, fan: false });
 });

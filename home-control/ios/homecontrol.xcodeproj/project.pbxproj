@@ -503,7 +503,9 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
-				PRODUCT_BUNDLE_IDENTIFIER = org.name.homecontrol;
+				PRODUCT_BUNDLE_IDENTIFIER = org.name.homecontrol.dev;
+				ROOM_DISPLAY_NAME = "Room (Dev)";
+				ROOM_PACKAGER_HOST = "Soumyas-MacBook-Pro.local:8081";
 				PRODUCT_NAME = Room;
 				SWIFT_OBJC_BRIDGING_HEADER = "homecontrol/homecontrol-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -536,6 +538,8 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = org.name.homecontrol;
+				ROOM_DISPLAY_NAME = Room;
+				ROOM_PACKAGER_HOST = "";
 				PRODUCT_NAME = Room;
 				SWIFT_OBJC_BRIDGING_HEADER = "homecontrol/homecontrol-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
@@ -562,7 +566,7 @@
 				);
 				MARKETING_VERSION = 1.1.0;
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
-				PRODUCT_BUNDLE_IDENTIFIER = org.name.homecontrol.widgets;
+				PRODUCT_BUNDLE_IDENTIFIER = org.name.homecontrol.dev.widgets;
 				PRODUCT_NAME = RoomWidgets;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;

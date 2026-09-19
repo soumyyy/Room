@@ -1,5 +1,5 @@
 import CryptoJS from 'crypto-js';
-import { TUYA_CLOUD } from './config';
+import { NODE, TUYA_CLOUD } from './config';
 
 export type AcScenePayload = {
   power: 0 | 1;
@@ -197,5 +197,22 @@ export async function sendAcScene(scene: AcScenePayload): Promise<boolean> {
     method: 'POST',
     path: `/v2.0/infrareds/${infraredId}/air-conditioners/${acRemoteId}/scenes/command`,
     body: scene,
+  });
+}
+
+export async function getNodeDevice(): Promise<{
+  online: boolean;
+  status: Array<{ code: string; value: unknown }>;
+}> {
+  return tuyaRequest({ method: 'GET', path: `/v1.0/devices/${NODE.id}` });
+}
+
+export async function sendNodeCommands(
+  commands: Array<{ code: string; value: boolean }>,
+): Promise<boolean> {
+  return tuyaRequest<boolean>({
+    method: 'POST',
+    path: `/v1.0/devices/${NODE.id}/commands`,
+    body: { commands },
   });
 }

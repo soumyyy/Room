@@ -20,14 +20,8 @@ class AppDelegate: ExpoAppDelegate {
     reactNativeDelegate = delegate
     reactNativeFactory = factory
 
-#if os(iOS) || os(tvOS)
-    window = UIWindow(frame: UIScreen.main.bounds)
-    factory.startReactNative(
-      withModuleName: "main",
-      in: window,
-      launchOptions: launchOptions)
-#endif
-
+    // React Native starts in SceneDelegate: iOS 27 terminates any app built
+    // with the iOS 27 SDK that has not adopted the UIScene lifecycle.
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -51,6 +45,47 @@ class AppDelegate: ExpoAppDelegate {
   }
 }
 
+class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+  var window: UIWindow?
+
+  func scene(
+    _ scene: UIScene,
+    willConnectTo session: UISceneSession,
+    options connectionOptions: UIScene.ConnectionOptions
+  ) {
+    guard
+      let windowScene = scene as? UIWindowScene,
+      let appDelegate = UIApplication.shared.delegate as? AppDelegate
+    else { return }
+
+    let window = UIWindow(windowScene: windowScene)
+    appDelegate.window = window
+    self.window = window
+
+    appDelegate.reactNativeFactory?.startReactNative(
+      withModuleName: "main",
+      in: window,
+      launchOptions: nil)
+
+    // A cold start from a link arrives here rather than in the app delegate.
+    if let context = connectionOptions.urlContexts.first {
+      _ = RCTLinkingManager.application(
+        UIApplication.shared, open: context.url, options: [:])
+    }
+  }
+
+  func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+    for context in URLContexts {
+      _ = RCTLinkingManager.application(UIApplication.shared, open: context.url, options: [:])
+    }
+  }
+
+  func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+    _ = RCTLinkingManager.application(
+      UIApplication.shared, continue: userActivity, restorationHandler: { _ in })
+  }
+}
+
 class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {
   // Extension point for config-plugins
 
@@ -61,6 +96,12 @@ class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {
 
   override func bundleURL() -> URL? {
 #if DEBUG
+    // Expo's launcher normally supplies the packager address. Building from
+    // Xcode leaves it empty, and a phone cannot reach the Mac as "localhost".
+    if let host = Bundle.main.object(forInfoDictionaryKey: "RoomPackagerHost") as? String,
+       !host.isEmpty {
+      RCTBundleURLProvider.sharedSettings().jsLocation = host
+    }
     return RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: ".expo/.virtual-metro-entry")
 #else
     return Bundle.main.url(forResource: "main", withExtension: "jsbundle")

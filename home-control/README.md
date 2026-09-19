@@ -23,7 +23,7 @@ Two files feed a generator, so nothing is pasted into four projects by hand:
 | File | Tracked | Holds |
 | --- | --- | --- |
 | `secrets.json` | no | Tuya client id, secret, IR blaster and remote ids |
-| `devices.json` | yes | bulb ids, names, IPs and their groups |
+| `devices.json` | yes | bulb ids, names, IPs and their groups, plus the switchboard node id |
 
 `npm run secrets` regenerates the per-platform files; `npm install` does it too,
 via `postinstall`. The generated files are gitignored. Copy
@@ -41,6 +41,13 @@ eas secret:create --name ROOM_TUYA_API_BASE_URL  --value ...
 eas secret:create --name ROOM_TUYA_INFRARED_ID   --value ...
 eas secret:create --name ROOM_TUYA_AC_REMOTE_ID  --value ...
 ```
+
+## Switchboard node
+
+"Bedside switchboard" (Tuya product 2Node) is a two-relay node reached through the
+same Tuya cloud project as the AC. `switch_1` is the tube light, `switch_2` the
+fan. Its device id lives in `devices.json` under `node`; Enter/Leave Room switch
+both along with the AC and bulbs.
 
 ## Bulb addressing
 

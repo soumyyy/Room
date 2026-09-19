@@ -63,6 +63,11 @@ check(
   !/nullable\s+NSNumber/.test(bridgeExports),
 );
 
+check(
+  'the bridge exports the away-state methods the screen calls',
+  /readAway:/.test(bridgeExports) && /saveAway:/.test(bridgeExports),
+);
+
 if (failures.length) {
   console.error('\nnative wiring check FAILED:');
   for (const failure of failures) console.error(`  - ${failure}`);

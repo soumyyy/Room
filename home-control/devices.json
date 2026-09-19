@@ -8,5 +8,6 @@
   "groups": [
     { "id": "left", "name": "Left Lights" },
     { "id": "right", "name": "Right Lights" }
-  ]
+  ],
+  "node": { "id": "d7b8800e6b70d037dejq2w", "name": "Bedside switchboard" }
 }

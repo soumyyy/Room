@@ -51,3 +51,31 @@ and `ROOM_TUYA_AC_REMOTE_ID` first — set them with `eas secret:create` before 
 
 With neither source present it warns and writes empty strings rather than failing the build;
 `isTuyaConfigured()` then reports the app as unconfigured, which is the honest outcome.
+
+## Building for iOS 27 with Xcode 27
+
+Four things broke together the first time this project met Xcode 27 and an iOS 27 phone.
+
+- **Crash on launch, exit is clean, no JS output.** The crash report's top frame is
+  `UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`. iOS 27 kills any app built with the
+  iOS 27 SDK that has not adopted the UIScene lifecycle. Fix: `UIApplicationSceneManifest` in `Info.plist`
+  and a `SceneDelegate` (in `AppDelegate.swift`, so `project.pbxproj` needs no new file) that creates the
+  window and calls `startReactNative`. Get crash reports with
+  `xcrun devicectl device copy from --device <id> --domain-type systemCrashLogs --source / --destination <dir>`.
+- **"No script URL provided".** Expo's launcher normally injects the packager address; building with
+  `xcodebuild` does not. Debug builds read `RoomPackagerHost` (build setting `ROOM_PACKAGER_HOST`, the Mac's
+  `<LocalHostName>.local:8081`) and set `RCTBundleURLProvider.jsLocation`. Release leaves it empty.
+- **`error: IPHONEOS_DEPLOYMENT_TARGET is set to 12.0`.** Xcode 27 supports 15.0 and up; a few pods still say
+  12.0. The Podfile `post_install` lifts any pod target below the app's own target.
+- **`expo run:ios` fails with "Can't determine id of Simulator app".** Xcode 27 no longer ships
+  Simulator.app inside Xcode, and Expo's launcher looks for it even for a device. Build with `xcodebuild`
+  and install with `xcrun devicectl device install app`, then start Metro separately.
+
+The dev build is `Room (Dev)`, bundle id `org.name.homecontrol.dev` (widgets `.dev.widgets`), so it installs
+beside the real app instead of replacing it. Release keeps `org.name.homecontrol`.
+
+## A CSS-in-a-mockup bug is a real bug
+
+A class reused for two different things (`.row` for both the Mode/Airflow pair and the Fan/Tube row) made a
+flex rule meant for one stretch the other. When a mockup looks wrong, look for shared class names before
+tweaking numbers.

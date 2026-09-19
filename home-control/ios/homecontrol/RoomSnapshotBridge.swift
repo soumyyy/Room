@@ -32,6 +32,32 @@ final class RoomSnapshotBridge: NSObject {
     resolve([json])
   }
 
+  /// What Leave room turned off, kept in the App Group so it survives the app
+  /// being closed while the user is out. It is the app's own bookkeeping, not
+  /// part of the snapshot the widget reads, so it lives under its own key.
+  private static let awayKey = "roomAwayState"
+
+  @objc(readAway:reject:)
+  func readAway(
+    _ resolve: @escaping ([Any]?) -> Void,
+    reject: @escaping (String?, String?, Error?) -> Void
+  ) {
+    let json = UserDefaults(suiteName: RoomConfig.appGroupID)?.string(forKey: Self.awayKey)
+    resolve([json ?? NSNull()])
+  }
+
+  /// A nil or empty string clears it: the user is back in the room.
+  @objc(saveAway:)
+  func saveAway(_ json: String?) {
+    let defaults = UserDefaults(suiteName: RoomConfig.appGroupID)
+
+    if let json, !json.isEmpty {
+      defaults?.set(json, forKey: Self.awayKey)
+    } else {
+      defaults?.removeObject(forKey: Self.awayKey)
+    }
+  }
+
   @objc(recordAC:mode:temp:wind:)
   func recordAC(_ power: NSNumber, mode: NSNumber, temp: NSNumber, wind: NSNumber) {
     let scene = AcScene(

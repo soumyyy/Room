@@ -14,6 +14,8 @@ export type StoredRoomSnapshot = {
 type RoomSnapshotBridge = {
   read(): Promise<string | null>;
   recordAC(power: number, mode: number, temp: number, wind: number): void;
+  readAway(): Promise<unknown>;
+  saveAway(json: string | null): void;
   recordLights(payload: {
     groups: string[];
     isOn: boolean;
@@ -99,5 +101,42 @@ export function recordLightCommand(
     });
   } catch {
     // Widget state is best-effort.
+  }
+}
+
+// ── Away state ──────────────────────────────────────────────────────────────
+
+// Without the native bridge (Expo Go) the away state lasts for the session
+// only, which is the best a JS-only build can do.
+let awayInMemory: string | null = null;
+
+/** The raw saved away state, or null when the user is not away. */
+export async function readAwayState(): Promise<string | null> {
+  if (typeof bridge?.readAway !== 'function') {
+    return awayInMemory;
+  }
+
+  try {
+    // The bridge resolves with a one-element array; unwrap it.
+    const value = await bridge.readAway();
+    const json = Array.isArray(value) ? value[0] : value;
+    return typeof json === 'string' ? json : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Saves the away state, or clears it when given null. Never throws. */
+export function saveAwayState(json: string | null) {
+  awayInMemory = json;
+
+  if (typeof bridge?.saveAway !== 'function') {
+    return;
+  }
+
+  try {
+    bridge.saveAway(json);
+  } catch {
+    // A failed save costs the restore after a restart, not the room.
   }
 }

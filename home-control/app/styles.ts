@@ -267,6 +267,52 @@ export const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+  // ── Fan (switchboard relay) ───────────────────────────────────────────────
+  fanRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0d0d0d',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#ffffff08',
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  fanRowOn: {
+    backgroundColor: '#001318',
+    borderColor: '#ffffff10',
+  },
+  fanDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#1c1c1e',
+    marginRight: 14,
+  },
+  fanDotOn: {
+    backgroundColor: '#64d2ff',
+    shadowColor: '#64d2ff',
+    shadowOpacity: 0.85,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  fanLabel: {
+    flex: 1,
+    color: '#3a3a3c',
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+  fanLabelOn: {
+    color: '#ffffff',
+  },
+  fanStatus: {
+    color: '#636366',
+    fontSize: 13,
+    fontWeight: '400',
+  },
+
   // ── Lights ────────────────────────────────────────────────────────────────
   lightsSection: {
     marginTop: 4,
@@ -358,9 +404,6 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  lightTileCombined: {
-    width: '100%',
-  },
   lightTileOff: {
     backgroundColor: '#0d0d0d',
     borderWidth: 1,
@@ -442,7 +485,7 @@ export const styles = StyleSheet.create({
   sheetTitle: {
     flex: 1,
     color: '#ffffff',
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
     letterSpacing: -0.4,
   },
@@ -452,7 +495,7 @@ export const styles = StyleSheet.create({
   },
   sheetCloseText: {
     color: '#0a84ff',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
   },
   sheetSection: {
@@ -475,7 +518,7 @@ export const styles = StyleSheet.create({
   },
   sheetBrightnessValue: {
     color: '#ffffff',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
   },
   brightnessSlider: {
