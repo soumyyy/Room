@@ -11,12 +11,53 @@ import WidgetKit
 final class RoomSnapshotBridge: NSObject {
   @objc static func requiresMainQueueSetup() -> Bool { false }
 
+  @objc(readScene:reject:)
+  func readScene(_ resolve: @escaping (Any?) -> Void, reject: @escaping (String?, String?, Error?) -> Void) {
+    do { resolve(String(data: try JSONEncoder().encode(RoomSnapshotStore.report()), encoding: .utf8)) }
+    catch { reject("scene_read", error.localizedDescription, error) }
+  }
+
+  @objc(performScene:resolve:reject:)
+  func performScene(_ action: String, resolve: @escaping (Any?) -> Void, reject: @escaping (String?, String?, Error?) -> Void) {
+    Task {
+      defer { self.reload() }
+      do {
+        let report = try await RoomController.shared.performScene(action)
+        resolve(String(data: try JSONEncoder().encode(report), encoding: .utf8))
+      } catch { reject("scene_failed", error.localizedDescription, error) }
+    }
+  }
+
+  @objc(recordObservation:)
+  func recordObservation(_ payload: NSDictionary) {
+    guard let milliseconds = payload["observedAt"] as? Double,
+          let body = payload["snapshot"] as? [String: Any],
+          let keys = payload["keys"] as? [String],
+          let data = try? JSONSerialization.data(withJSONObject: body),
+          let incoming = try? JSONDecoder().decode(RoomSnapshot.self, from: data) else { return }
+    RoomSnapshotStore.update(keys: keys, observedAt: Date(timeIntervalSince1970: milliseconds / 1000), command: payload["command"] as? Bool ?? false) {
+      if let ac = incoming.ac { $0.ac = ac }
+      if let node = incoming.node { $0.apply(node) }
+      for (id, light) in incoming.lights {
+        var state = light
+        state.presetID = light.presetID ?? $0.lights[id]?.presetID
+        state.brightness = light.brightness ?? $0.lights[id]?.brightness
+        $0.lights[id] = state
+      }
+      if let bulbs = incoming.bulbs {
+        if $0.bulbs == nil { $0.bulbs = [:] }
+        for (id, pilot) in bulbs { $0.bulbs?[id] = pilot }
+      }
+    }
+    reload()
+  }
+
   /// Hands the app whatever the room was last known to be doing, so the first
   /// frame can show real values instead of waiting on the network. Returns a
   /// JSON string rather than a dictionary to keep one encoding of the snapshot.
   @objc(read:reject:)
   func read(
-    _ resolve: @escaping ([Any]?) -> Void,
+    _ resolve: @escaping (Any?) -> Void,
     reject: @escaping (String?, String?, Error?) -> Void
   ) {
     let snapshot = RoomSnapshotStore.load()
@@ -25,11 +66,11 @@ final class RoomSnapshotBridge: NSObject {
           let data = try? JSONEncoder().encode(snapshot),
           let json = String(data: data, encoding: .utf8) else {
       // Nothing has ever been recorded; say so rather than invent a room.
-      resolve([NSNull()])
+      resolve(nil)
       return
     }
 
-    resolve([json])
+    resolve(json)
   }
 
   /// What Leave room turned off, kept in the App Group so it survives the app

@@ -103,10 +103,10 @@ test('merging statuses keeps brightness when a bulb does not report one', () => 
   assert.equal(merged[0].busy, false);
 });
 
-test('merging statuses leaves unmentioned bulbs alone but clears busy', () => {
+test('merging statuses leaves unmentioned bulbs and their pending commands alone', () => {
   const current = BULBS.map(createBulbState).map((bulb) => ({ ...bulb, busy: true, isOn: true }));
   const merged = mergeBulbStatuses(current, []);
-  assert.ok(merged.every((bulb) => bulb.busy === false));
+  assert.ok(merged.every((bulb) => bulb.busy === true));
   assert.ok(merged.every((bulb) => bulb.isOn === true));
 });
 

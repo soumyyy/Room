@@ -89,6 +89,7 @@ function presetById(presetId) {
 }
 
 function mergeBulbs(nextBulbs) {
+  if (!nextBulbs) return;
   state.bulbs = nextBulbs.map((bulb) => ({
     ...bulb,
     brightness:
@@ -327,7 +328,7 @@ function render() {
 
 async function refreshDashboard() {
   const response = await window.roomApi.refresh();
-  state.ac = response.ac;
+  if (response.ac) state.ac = response.ac;
   mergeBulbs(response.bulbs);
   render();
   return response;
@@ -400,6 +401,7 @@ async function toggleAllLights() {
 
   try {
     const live = await window.roomApi.refresh();
+    if (!live.bulbs) throw new Error('Unable to reach the lights. Tap to retry.');
     mergeBulbs(live.bulbs);
     renderLights();
 
@@ -545,7 +547,7 @@ async function bootstrap() {
     state.groups = bootstrapPayload.groups;
     state.acPresets = bootstrapPayload.acPresets;
     state.lightPresets = bootstrapPayload.lightPresets;
-    state.ac = bootstrapPayload.state.ac;
+    if (bootstrapPayload.state.ac) state.ac = bootstrapPayload.state.ac;
     mergeBulbs(bootstrapPayload.state.bulbs);
 
     for (const group of state.groups) {
@@ -553,6 +555,7 @@ async function bootstrap() {
     }
 
     render();
+    if (bootstrapPayload.state.errors?.length) showToast(bootstrapPayload.state.errors.join('. '));
   } catch (error) {
     showToast(error.message || 'Unable to start Room');
   } finally {

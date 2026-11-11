@@ -45,11 +45,13 @@ actor TuyaClient {
 
   private let session = URLSession.shared
   private var tokenCache = TuyaTokenCache()
+  private var tokenTask: Task<String, Error>?
 
   func getACStatus() async throws -> AcScene {
     let status = try await request(
       method: "GET",
       path: "/v2.0/infrareds/\(RoomConfig.tuya.infraredID)/remotes/\(RoomConfig.tuya.acRemoteID)/ac/status",
+      body: Optional<AcScene>.none,
       expecting: TuyaAcStatusResult.self
     )
 
@@ -57,12 +59,13 @@ actor TuyaClient {
   }
 
   func sendACScene(_ scene: AcScene) async throws {
-    _ = try await request(
+    let accepted = try await request(
       method: "POST",
       path: "/v2.0/infrareds/\(RoomConfig.tuya.infraredID)/air-conditioners/\(RoomConfig.tuya.acRemoteID)/scenes/command",
       body: scene,
-      expecting: TuyaIgnoredResult.self
+      expecting: Bool.self
     )
+    guard accepted else { throw RoomNetworkError.tuya(message: "AC command was not accepted.") }
   }
 
   private func request<Result: Decodable, Body: Encodable>(
@@ -112,6 +115,7 @@ actor TuyaClient {
 
     var request = URLRequest(url: url)
     request.httpMethod = method
+    request.timeoutInterval = 8
     if !bodyData.isEmpty {
       request.httpBody = bodyData
       request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -148,13 +152,21 @@ actor TuyaClient {
        tokenCache.expiresAt.timeIntervalSinceNow > 60 {
       return tokenCache.accessToken
     }
+    if let tokenTask { return try await tokenTask.value }
+    let task = Task { try await self.fetchAccessToken() }
+    tokenTask = task
+    defer { tokenTask = nil }
+    return try await task.value
+  }
 
+  private func fetchAccessToken() async throws -> String {
     let requestPath = buildRequestPath(path: "/v1.0/token", query: ["grant_type": 1])
     guard let url = URL(string: requestPath, relativeTo: RoomConfig.tuya.apiBaseURL) else {
       throw RoomNetworkError.invalidURL
     }
     var request = URLRequest(url: url)
     request.httpMethod = "GET"
+    request.timeoutInterval = 8
     signedHeaders(method: "GET", requestPath: requestPath, bodyData: Data(), accessToken: "")
       .forEach { request.setValue($1, forHTTPHeaderField: $0) }
 
@@ -279,7 +291,7 @@ private extension KeyedDecodingContainer {
     }
 
     if let value = try? decodeIfPresent(String.self, forKey: key) {
-      return value.flatMap(Int.init)
+      return Int(value)
     }
 
     return nil

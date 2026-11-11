@@ -3,212 +3,196 @@ import Foundation
 actor RoomController {
   static let shared = RoomController()
 
-  // MARK: - Scenes
-
   func enterRoom() async throws {
-    async let acTask: Void = TuyaClient.shared.sendACScene(RoomConfig.enterScene)
-    async let lightsTask: Void = WiZClient.shared.apply(RoomConfig.enterLights, to: RoomConfig.bulbs)
-    _ = try await (acTask, lightsTask)
-
-    record {
-      $0.ac = RoomConfig.enterScene
-      $0.setLights(
-        .init(isOn: true, brightness: RoomConfig.enterLights.dimming, presetID: "neutral-white"),
-        forGroups: RoomConfig.lightGroupIDs
-      )
-    }
+    let report = try await performScene("enter")
+    if !report.failed.isEmpty { throw RoomNetworkError.tuya(message: "Some devices were not restored. Run Enter Room again to retry.") }
   }
 
   func leaveRoom() async throws {
-    async let acTask: Void = TuyaClient.shared.sendACScene(RoomConfig.leaveScene)
-    async let lightsTask: Void = WiZClient.shared.apply(RoomConfig.leaveLights, to: RoomConfig.bulbs)
-    // The switchboard is a third leg that must not sink the other two: an
-    // unreachable node should not stop the AC and lights from switching off.
-    async let boardTask: Bool = switchBoardOff()
-    _ = try await (acTask, lightsTask)
-    let boardOff = await boardTask
+    let report = try await performScene("leave")
+    if !report.failed.isEmpty { throw RoomNetworkError.tuya(message: "Some devices could not be confirmed off. Run Leave Room again to retry.") }
+  }
 
-    record {
-      $0.ac = RoomConfig.leaveScene
-      $0.setLights(.init(isOn: false), forGroups: RoomConfig.lightGroupIDs)
-      if boardOff {
-        $0.apply(NodeState(tube: false, fan: false))
+  /// The same transaction is used by React Native, Siri and WidgetKit. The
+  /// restore plan is durable before any command; successes are committed one by one.
+  func performScene(_ action: String) async throws -> RoomSceneReport {
+    let lease = try await RoomSnapshotStore.acquireSceneLock()
+    defer { RoomSnapshotStore.releaseSceneLock(lease) }
+    var plan = RoomSnapshotStore.scene()
+    if action == "leave" {
+      if plan?.phase == "away" { return RoomSnapshotStore.report() }
+      if plan?.phase != "leaving" {
+        let current = await refresh()
+        // A failed Enter retains the original restore plan on a new Leave.
+        plan = RoomSceneState(restore: plan?.restore ?? current, phase: "leaving",
+          pending: ["ac", "fan", "tube"] + RoomConfig.bulbs.map { "bulb:" + $0.id })
+      }
+    } else if action == "enter" {
+      if plan?.phase != "entering" {
+        var restore = plan?.restore ?? RoomSnapshot.unknown
+        if plan == nil {
+          restore.ac = RoomConfig.enterScene
+          restore.setLights(.init(isOn: true, brightness: 100, presetID: "neutral-white"), forGroups: RoomConfig.lightGroupIDs)
+        }
+        var targets: [String] = []
+        if restore.ac?.power == 1 { targets.append("ac") }
+        if restore.node?.fan == true { targets.append("fan") }
+        if restore.node?.tube == true { targets.append("tube") }
+        for bulb in RoomConfig.bulbs {
+          if restore.bulbs?[bulb.id]?.state ?? restore.lights[bulb.group]?.isOn ?? false {
+            targets.append("bulb:" + bulb.id)
+          }
+        }
+        plan = RoomSceneState(restore: restore, phase: "entering", pending: targets)
+      }
+    } else { throw RoomNetworkError.invalidResponse }
+    guard var current = plan else { return RoomSnapshotStore.report() }
+    try RoomSnapshotStore.saveScene(current)
+    let restore = current.restore
+    let leaving = current.phase == "leaving"
+    let targets = current.pending
+    await withTaskGroup(of: (String, String?).self) { group in
+      for key in targets {
+        group.addTask {
+          do { try await self.sceneDevice(key, leaving: leaving, restore: restore); return (key, nil) }
+          catch { return (key, error.localizedDescription) }
+        }
+      }
+      for await (key, error) in group {
+        if let error { current.failures[key] = error }
+        else { current.pending.removeAll { $0 == key }; current.failures.removeValue(forKey: key) }
+        // A save failure must not erase the last durable retry list. Repeating
+        // an explicit on/off action is safe if the process is interrupted here.
+        try? RoomSnapshotStore.saveScene(current)
       }
     }
+    if current.pending.isEmpty {
+      if leaving { current.phase = "away"; try RoomSnapshotStore.saveScene(current) }
+      else { try RoomSnapshotStore.saveScene(nil) }
+    } else { try RoomSnapshotStore.saveScene(current) }
+    updateLightGroups()
+    return RoomSnapshotStore.report()
   }
 
-  private func switchBoardOff() async -> Bool {
-    do {
-      try await TuyaClient.shared.sendNodeCommands(RoomConfig.nodeCommands(tube: false, fan: false))
-      return true
-    } catch {
-      return false
+  private func sceneDevice(_ key: String, leaving: Bool, restore: RoomSnapshot) async throws {
+    switch key {
+    case "ac": try await setACScene(leaving ? (restore.ac ?? RoomConfig.acOffScene).with(power: 0) : (restore.ac ?? RoomConfig.enterScene))
+    case "fan": try await setFan(!leaving)
+    case "tube": try await setTube(!leaving)
+    default:
+      guard let bulb = RoomConfig.bulbs.first(where: { "bulb:" + $0.id == key }) else { throw RoomNetworkError.invalidResponse }
+      var pilot = restore.bulbs?[bulb.id]
+      if pilot == nil {
+        let light = restore.lights[bulb.group]
+        pilot = RoomConfig.preset(id: light?.presetID ?? "neutral-white")?.pilot ?? RoomConfig.enterLights
+        pilot?.dimming = light?.brightness
+      }
+      var desired = pilot ?? RoomConfig.enterLights
+      desired.state = !leaving
+      try await WiZClient.shared.apply(leaving ? WizPilot(state: false) : desired, to: [bulb])
     }
   }
 
-  // MARK: - Air conditioner
-
-  /// Reads the remote and records what it says, so a refresh also refreshes
-  /// what the widget will show.
   @discardableResult
   func acStatus() async throws -> AcScene {
+    let began = Date()
     let scene = try await TuyaClient.shared.fetchACScene()
-    record { $0.ac = scene }
+    RoomSnapshotStore.update(keys: ["ac"], observedAt: began) { $0.ac = scene }
     return scene
   }
 
-  func acOn() async throws {
-    try await TuyaClient.shared.sendACScene(RoomConfig.acOnScene)
-    record { $0.ac = RoomConfig.acOnScene }
+  private func setACScene(_ scene: AcScene) async throws {
+    _ = try await queueAC { _ in scene }
   }
 
-  func acOff() async throws {
-    try await TuyaClient.shared.sendACScene(RoomConfig.acOffScene)
-    record { $0.ac = RoomConfig.acOffScene }
+  private func transmitACScene(_ scene: AcScene) async throws {
+    try await TuyaClient.shared.sendACScene(scene)
+    RoomSnapshotStore.update(keys: ["ac"], command: true) { $0.ac = scene }
   }
+  func acOn() async throws { _ = try await queueAC { $0.with(power: 1) } }
+  func acOff() async throws { _ = try await queueAC { $0.with(power: 0) } }
 
-  /// Reads the scene the remote is holding, changes one field and sends the
-  /// whole thing back — the only way to edit part of a Tuya AC scene. Turning
-  /// the unit on is implied, matching what the app's controls do.
-  private func amendScene(_ edit: (AcScene) -> AcScene) async throws -> AcScene {
-    let current = (try? await TuyaClient.shared.fetchACScene()) ?? RoomConfig.acOnScene
-    let next = edit(current).with(power: 1)
-    try await TuyaClient.shared.sendACScene(next)
-    record { $0.ac = next }
-    return next
+  private var acTail: Task<Void, Never>?
+  private func amendScene(_ edit: @escaping @Sendable (AcScene) -> AcScene) async throws -> AcScene {
+    try await queueAC { edit($0).with(power: 1) }
   }
-
-  @discardableResult
-  func setACTemperature(_ temp: Int) async throws -> AcScene {
-    try await amendScene { $0.with(temp: temp) }
-  }
-
-  @discardableResult
-  func adjustACTemperature(by delta: Int) async throws -> AcScene {
-    try await amendScene { $0.with(temp: $0.temp + delta) }
-  }
-
-  @discardableResult
-  func setACMode(_ mode: Int) async throws -> AcScene {
-    try await amendScene { $0.with(mode: mode) }
-  }
-
-  @discardableResult
-  func setFanSpeed(_ wind: Int) async throws -> AcScene {
-    try await amendScene { $0.with(wind: wind) }
-  }
-
-  // MARK: - Switchboard
-
-  func setTube(_ on: Bool) async throws {
-    try await TuyaClient.shared.sendNodeCommands(RoomConfig.nodeCommands(tube: on))
-    record { $0.apply(NodeState(tube: on, fan: nil)) }
-  }
-
-  func setFan(_ on: Bool) async throws {
-    try await TuyaClient.shared.sendNodeCommands(RoomConfig.nodeCommands(fan: on))
-    record { $0.apply(NodeState(tube: nil, fan: on)) }
-  }
-
-  // MARK: - Lights
-
-  func lightsOn(group: String? = nil) async throws {
-    try await WiZClient.shared.apply(RoomConfig.lightsOn, to: RoomConfig.bulbs(inGroup: group))
-    record {
-      $0.setLights(
-        .init(isOn: true, brightness: RoomConfig.lightsOn.dimming, presetID: "neutral-white"),
-        forGroups: RoomConfig.groupIDs(inGroup: group)
-      )
+  private func queueAC(_ edit: @escaping @Sendable (AcScene) -> AcScene) async throws -> AcScene {
+    let previous = acTail
+    let task = Task<AcScene, Error> {
+      await previous?.value
+      let current: AcScene
+      if let known = RoomSnapshotStore.load().ac { current = known }
+      else { current = (try? await TuyaClient.shared.fetchACScene()) ?? RoomConfig.acOnScene }
+      let next = edit(current)
+      try await self.transmitACScene(next)
+      return next
     }
+    acTail = Task { _ = try? await task.value }
+    return try await task.value
+  }
+  @discardableResult func setACTemperature(_ temp: Int) async throws -> AcScene { try await amendScene { $0.with(temp: temp) } }
+  @discardableResult func adjustACTemperature(by delta: Int) async throws -> AcScene { try await amendScene { $0.with(temp: $0.temp + delta) } }
+  @discardableResult func setACMode(_ mode: Int) async throws -> AcScene { try await amendScene { $0.with(mode: mode) } }
+  @discardableResult func setFanSpeed(_ wind: Int) async throws -> AcScene { try await amendScene { $0.with(wind: wind) } }
+
+  func setTube(_ on: Bool) async throws { try await setNode(tube: on, fan: nil) }
+  func setFan(_ on: Bool) async throws { try await setNode(tube: nil, fan: on) }
+  private func setNode(tube: Bool?, fan: Bool?) async throws {
+    try await TuyaClient.shared.sendNodeCommands(RoomConfig.nodeCommands(tube: tube, fan: fan))
+    let keys = (tube == nil ? [] : ["tube"]) + (fan == nil ? [] : ["fan"])
+    RoomSnapshotStore.update(keys: keys, command: true) { $0.apply(NodeState(tube: tube, fan: fan)) }
   }
 
-  func lightsOff(group: String? = nil) async throws {
-    try await WiZClient.shared.apply(RoomConfig.lightsOff, to: RoomConfig.bulbs(inGroup: group))
-    record {
-      $0.setLights(.init(isOn: false), forGroups: RoomConfig.groupIDs(inGroup: group))
-    }
-  }
-
-  func setBrightness(_ level: Int, group: String? = nil) async throws {
-    let brightness = RoomConfig.clampBrightness(level)
-    try await WiZClient.shared.apply(
-      WizPilot(state: true, dimming: brightness),
-      to: RoomConfig.bulbs(inGroup: group)
-    )
-
-    record { snapshot in
-      for id in RoomConfig.groupIDs(inGroup: group) {
-        // Keep whatever colour the group was already showing.
-        var state = snapshot.lights[id] ?? .init(isOn: true)
-        state.isOn = true
-        state.brightness = brightness
-        snapshot.lights[id] = state
-      }
-    }
-  }
-
+  func lightsOn(group: String? = nil) async throws { try await applyLight(RoomConfig.lightsOn, group: group, preset: "neutral-white") }
+  func lightsOff(group: String? = nil) async throws { try await applyLight(RoomConfig.lightsOff, group: group) }
+  func setBrightness(_ level: Int, group: String? = nil) async throws { try await applyLight(WizPilot(state: true, dimming: RoomConfig.clampBrightness(level)), group: group) }
   func setPreset(_ presetID: String, group: String? = nil) async throws {
-    guard let preset = RoomConfig.preset(id: presetID) else {
-      throw RoomNetworkError.wiz(message: "No light preset named \(presetID).")
-    }
+    guard let preset = RoomConfig.preset(id: presetID) else { throw RoomNetworkError.wiz(message: "Unknown light preset.") }
+    try await applyLight(preset.pilot, group: group, preset: preset.id)
+  }
+  private func applyLight(_ pilot: WizPilot, group: String?, preset: String? = nil) async throws {
+    do {
+      try await WiZClient.shared.apply(pilot, to: RoomConfig.bulbs(inGroup: group))
+      updateLightGroups(preset: preset, groups: RoomConfig.groupIDs(inGroup: group))
+    } catch { updateLightGroups(); throw error }
+  }
 
-    try await WiZClient.shared.apply(preset.pilot, to: RoomConfig.bulbs(inGroup: group))
-
-    record { snapshot in
-      for id in RoomConfig.groupIDs(inGroup: group) {
-        var state = snapshot.lights[id] ?? .init(isOn: true)
-        state.isOn = true
-        state.presetID = preset.id
-        snapshot.lights[id] = state
+  private func updateLightGroups(preset: String? = nil, groups: [String] = RoomConfig.lightGroupIDs) {
+    let snapshot = RoomSnapshotStore.load()
+    for id in groups {
+      let bulbs = RoomConfig.bulbs(inGroup: id)
+      let pilots = bulbs.compactMap { snapshot.bulbs?[$0.id] }
+      guard pilots.count == bulbs.count, let reading = RoomSnapshot.groupState(from: pilots.map { WizReading(isOn: $0.state, brightness: $0.dimming) }) else { continue }
+      let oldest = bulbs.compactMap { snapshot.observedAt?["bulb:" + $0.id] }.min() ?? .distantPast
+      RoomSnapshotStore.update(keys: ["lights:" + id], observedAt: oldest) {
+        var light = reading
+        light.presetID = preset ?? $0.lights[id]?.presetID
+        $0.lights[id] = light
       }
     }
   }
 
-  // MARK: - Refresh
-
-  /// Asks the hardware what it is actually doing and folds the answers into the
-  /// snapshot. Each leg is independently optional: Tuya is a cloud call that
-  /// works on cellular, the bulbs only answer on the same Wi-Fi. Whatever does
-  /// not answer keeps its previously recorded value rather than being cleared,
-  /// so a refresh can improve the snapshot but never degrade it.
   @discardableResult
   func refresh() async -> RoomSnapshot {
+    let began = Date()
     async let scene = try? TuyaClient.shared.fetchACScene()
-    async let groups = WiZClient.shared.readGroupStates()
+    async let online = try? TuyaClient.shared.infraredIsOnline()
+    async let pilots = WiZClient.shared.readPilots()
     async let board = try? TuyaClient.shared.fetchNode()
-
-    let resolvedScene = await scene
-    let resolvedGroups = await groups
-    let resolvedBoard = await board
-
-    record { snapshot in
-      if let resolvedScene {
-        snapshot.ac = resolvedScene
-      }
-
-      if let resolvedBoard {
-        snapshot.apply(resolvedBoard)
-      }
-
-      for (id, reading) in resolvedGroups {
-        // Keep the colour we recorded; getPilot does not name a preset.
-        var state = snapshot.lights[id] ?? reading
-        state.isOn = reading.isOn
-
-        if let brightness = reading.brightness {
-          state.brightness = brightness
-        }
-
-        snapshot.lights[id] = state
-      }
+    let (cloudScene, resolvedPilots, resolvedBoard, hubOnline) = await (scene, pilots, board, online)
+    let resolvedScene = hubOnline == true ? cloudScene : nil
+    var keys: [String] = []
+    if resolvedScene != nil { keys.append("ac") }
+    if resolvedBoard?.tube != nil { keys.append("tube") }
+    if resolvedBoard?.fan != nil { keys.append("fan") }
+    keys += resolvedPilots.keys.map { "bulb:" + $0 }
+    RoomSnapshotStore.update(keys: keys, observedAt: began) { snapshot in
+      if let resolvedScene { snapshot.ac = resolvedScene }
+      if let resolvedBoard { snapshot.apply(resolvedBoard) }
+      if snapshot.bulbs == nil { snapshot.bulbs = [:] }
+      for (id, pilot) in resolvedPilots { snapshot.bulbs?[id] = pilot }
     }
-
+    updateLightGroups()
     return RoomSnapshotStore.load()
-  }
-
-  /// Only reached after the command succeeded, so the snapshot records what we
-  /// actually asked the hardware to do rather than what we hoped.
-  private func record(_ mutate: (inout RoomSnapshot) -> Void) {
-    RoomSnapshotStore.update(mutate)
   }
 }

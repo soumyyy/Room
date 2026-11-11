@@ -10,6 +10,8 @@ export type WizPilotResult = {
   g: number | null;
   b: number | null;
   temp: number | null;
+  c?: number | null;
+  w?: number | null;
 };
 
 async function send(ip: string, payload: Record<string, unknown>): Promise<void> {
@@ -17,6 +19,7 @@ async function send(ip: string, payload: Record<string, unknown>): Promise<void>
     const socket = UdpSocket.createSocket({ type: 'udp4' });
     const body = JSON.stringify(payload);
     let settled = false;
+    const timeout = setTimeout(() => finish(() => reject(new Error(`WiZ device ${ip} timed out`))), RESPONSE_TIMEOUT_MS);
 
     const finish = (next: () => void) => {
       if (settled) {
@@ -24,6 +27,7 @@ async function send(ip: string, payload: Record<string, unknown>): Promise<void>
       }
 
       settled = true;
+      clearTimeout(timeout);
 
       try {
         socket.close();
@@ -53,7 +57,7 @@ async function request(ip: string): Promise<Record<string, unknown>> {
     const socket = UdpSocket.createSocket({ type: 'udp4' });
     const body = JSON.stringify({ method: 'getPilot', params: {} });
     let settled = false;
-    let timeout: ReturnType<typeof setTimeout> | null = null;
+    const timeout = setTimeout(() => finish(() => reject(new Error(`WiZ device ${ip} timed out`))), RESPONSE_TIMEOUT_MS);
 
     const finish = (next: () => void) => {
       if (settled) {
@@ -81,7 +85,11 @@ async function request(ip: string): Promise<Record<string, unknown>> {
       }
 
       try {
-        finish(() => resolve(JSON.parse(message.toString('utf8'))));
+        const payload: unknown = JSON.parse(message.toString('utf8'));
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+          throw new Error('Invalid WiZ response');
+        }
+        finish(() => resolve(payload as Record<string, unknown>));
       } catch {
         finish(() => reject(new Error(`Invalid WiZ response from ${ip}`)));
       }
@@ -96,9 +104,6 @@ async function request(ip: string): Promise<Record<string, unknown>> {
           return;
         }
 
-        timeout = setTimeout(() => {
-          finish(() => reject(new Error(`WiZ device ${ip} timed out`)));
-        }, RESPONSE_TIMEOUT_MS);
       });
     });
   });
@@ -112,6 +117,8 @@ function toPilotResult(result: Record<string, unknown>): WizPilotResult {
     g: Number.isFinite(Number(result.g)) ? Number(result.g) : null,
     b: Number.isFinite(Number(result.b)) ? Number(result.b) : null,
     temp: Number.isFinite(Number(result.temp)) ? Number(result.temp) : null,
+    c: result.c != null && Number.isFinite(Number(result.c)) ? Number(result.c) : null,
+    w: result.w != null && Number.isFinite(Number(result.w)) ? Number(result.w) : null,
   };
 }
 
@@ -123,7 +130,11 @@ async function getPilot(ip: string): Promise<WizPilotResult> {
     throw new Error(error.message ?? `WiZ device ${ip} rejected the request`);
   }
 
-  return toPilotResult((payload.result as Record<string, unknown>) ?? {});
+  const result = payload.result as Record<string, unknown> | undefined;
+  if (!result || typeof result.state !== 'boolean') {
+    throw new Error(`WiZ device ${ip} returned no valid state`);
+  }
+  return toPilotResult(result);
 }
 
 export const Wiz = {

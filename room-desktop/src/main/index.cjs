@@ -45,8 +45,12 @@ function createWindow() {
 }
 
 async function readDashboardState() {
-  const [ac, bulbs] = await Promise.all([getAcStatus(), readAllBulbStatuses()]);
-  return { ac, bulbs };
+  const [ac, bulbs] = await Promise.allSettled([getAcStatus(), readAllBulbStatuses()]);
+  return {
+    ac: ac.status === 'fulfilled' ? ac.value : null,
+    bulbs: bulbs.status === 'fulfilled' ? bulbs.value : null,
+    errors: [ac, bulbs].filter((result) => result.status === 'rejected').map((result) => result.reason?.message ?? 'Device unavailable'),
+  };
 }
 
 ipcMain.handle('room:bootstrap', async () => ({

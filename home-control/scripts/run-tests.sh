@@ -18,6 +18,7 @@ npx tsc app/roomDomain.test.ts --outDir "$ts_out" \
   --module commonjs --target es2022 --moduleResolution node \
   --skipLibCheck --esModuleInterop
 node --test "$ts_out/roomDomain.test.js"
+node --test scripts/tests/reliability.test.cjs
 
 echo
 echo "── native wiring ──"
@@ -33,3 +34,11 @@ swiftc -O -o "$out/roomtests" \
   ios/RoomWidgetShared/RoomSnapshot.swift \
   scripts/tests/RoomDomainTests.swift
 "$out/roomtests"
+
+swiftc -D ROOM_TESTS -o "$out/controller-tests" \
+  ios/RoomWidgetShared/RoomGenerated.swift \
+  ios/RoomWidgetShared/RoomConfig.swift \
+  ios/RoomWidgetShared/RoomSnapshot.swift \
+  ios/RoomWidgetShared/RoomController.swift \
+  scripts/tests/RoomControllerTests.swift
+"$out/controller-tests"

@@ -176,8 +176,8 @@ struct EnterRoomIntent: AppIntent {
   static let isDiscoverable = true
 
   func perform() async throws -> some IntentResult {
+    defer { RoomIntentSupport.reloadWidget() }
     try await RoomController.shared.enterRoom()
-    RoomIntentSupport.reloadWidget()
     return .result()
   }
 }
@@ -189,8 +189,8 @@ struct LeaveRoomIntent: AppIntent {
   static let isDiscoverable = true
 
   func perform() async throws -> some IntentResult {
+    defer { RoomIntentSupport.reloadWidget() }
     try await RoomController.shared.leaveRoom()
-    RoomIntentSupport.reloadWidget()
     return .result()
   }
 }

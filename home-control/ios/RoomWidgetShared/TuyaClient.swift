@@ -123,14 +123,16 @@ actor TuyaClient {
 
   private let session = URLSession.shared
   private var tokenCache = TuyaTokenCache()
+  private var tokenTask: Task<String, Error>?
 
   func sendACScene(_ scene: AcScene) async throws {
-    _ = try await request(
+    let accepted = try await request(
       method: "POST",
       path: "/v2.0/infrareds/\(RoomConfig.tuya.infraredID)/air-conditioners/\(RoomConfig.tuya.acRemoteID)/scenes/command",
       body: scene,
-      expecting: TuyaIgnoredResult.self
+      expecting: Bool.self
     )
+    guard accepted else { throw RoomNetworkError.tuya(message: "AC command was not accepted.") }
   }
 
   /// The scene the IR remote believes the unit is holding. Note this is the
@@ -144,6 +146,11 @@ actor TuyaClient {
     )
 
     return result.scene
+  }
+
+  func infraredIsOnline() async throws -> Bool {
+    let device = try await request(method: "GET", path: "/v1.0/devices/\(RoomConfig.tuya.infraredID)", expecting: TuyaNodeResult.self)
+    return device.online == true
   }
 
   /// The relays as the cloud reports them, or nil when the node is offline or
@@ -164,12 +171,13 @@ actor TuyaClient {
   func sendNodeCommands(_ commands: [NodeCommand]) async throws {
     guard !commands.isEmpty else { return }
 
-    _ = try await request(
+    let accepted = try await request(
       method: "POST",
       path: "/v1.0/devices/\(RoomConfig.tuya.nodeID)/commands",
       body: TuyaCommandBody(commands: commands),
-      expecting: TuyaIgnoredResult.self
+      expecting: Bool.self
     )
+    guard accepted else { throw RoomNetworkError.tuya(message: "Switchboard command was not accepted.") }
   }
 
   private func request<Result: Decodable, Body: Encodable>(
@@ -270,7 +278,14 @@ actor TuyaClient {
        tokenCache.expiresAt.timeIntervalSinceNow > 60 {
       return tokenCache.accessToken
     }
+    if let tokenTask { return try await tokenTask.value }
+    let task = Task { try await self.fetchAccessToken() }
+    tokenTask = task
+    defer { tokenTask = nil }
+    return try await task.value
+  }
 
+  private func fetchAccessToken() async throws -> String {
     let requestPath = buildRequestPath(path: "/v1.0/token", query: ["grant_type": 1])
     guard let url = URL(string: requestPath, relativeTo: RoomConfig.tuya.apiBaseURL) else {
       throw RoomNetworkError.invalidURL

@@ -37,7 +37,7 @@ async function sendUdpJson(ip, payload, { expectReply = false } = {}) {
     const socket = dgram.createSocket('udp4');
     const rawPayload = Buffer.from(JSON.stringify(payload));
     let settled = false;
-    let timer = null;
+    const timer = setTimeout(() => finish(() => reject(new Error(`WiZ device ${ip} timed out`))), WIZ_TIMEOUT_MS);
 
     const finish = (next) => {
       if (settled) {
@@ -68,7 +68,9 @@ async function sendUdpJson(ip, payload, { expectReply = false } = {}) {
         }
 
         try {
-          finish(() => resolve(JSON.parse(message.toString('utf8'))));
+          const parsed = JSON.parse(message.toString('utf8'));
+          if (!parsed || typeof parsed !== 'object') throw new Error('Invalid reply');
+          finish(() => resolve(parsed));
         } catch {
           finish(() => reject(new Error(`Invalid WiZ response from ${ip}`)));
         }
@@ -87,9 +89,6 @@ async function sendUdpJson(ip, payload, { expectReply = false } = {}) {
           return;
         }
 
-        timer = setTimeout(() => {
-          finish(() => reject(new Error(`WiZ device ${ip} timed out`)));
-        }, WIZ_TIMEOUT_MS);
       });
     });
   });
@@ -109,7 +108,8 @@ async function getPilot(ip) {
     throw new Error(payload.error.message ?? `WiZ device ${ip} rejected the request`);
   }
 
-  return payload?.result ?? {};
+  if (typeof payload?.result?.state !== 'boolean') throw new Error(`Invalid WiZ state from ${ip}`);
+  return payload.result;
 }
 
 async function setPilot(ip, params) {
@@ -151,6 +151,14 @@ async function applyPilotToBulbs(bulbs, params) {
   }
 
   await sleep(150);
+
+  const observed = await readBulbStatuses(bulbs);
+  const confirmed = observed.filter((status) => {
+    if (!status.reachable || (typeof params.state === 'boolean' && status.isOn !== params.state)) return false;
+    return [['dimming', 'brightness'], ['temp', 'temp'], ['r', 'r'], ['g', 'g'], ['b', 'b']]
+      .every(([requested, field]) => typeof params[requested] !== 'number' || (status[field] != null && Math.abs(status[field] - params[requested]) <= 1));
+  });
+  if (confirmed.length !== bulbs.length) throw new Error(`${confirmed.length}/${bulbs.length} lights confirmed. Tap to retry.`);
 
   return {
     bulbs: await readAllBulbStatuses(),

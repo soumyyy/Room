@@ -68,7 +68,7 @@ struct AcScene: Codable, Sendable, Equatable {
   }
 }
 
-struct WizPilot: Codable, Sendable {
+struct WizPilot: Codable, Sendable, Equatable {
   var state: Bool
   var dimming: Int?
   var temp: Int?
@@ -105,6 +105,19 @@ struct LightPreset: Identifiable, Sendable {
   let id: String
   let name: String
   let pilot: WizPilot
+}
+
+extension WizPilot {
+  func matches(_ actual: WizPilot) -> Bool {
+    guard state == actual.state else { return false }
+    if !state { return true }
+    return [(dimming, actual.dimming), (temp, actual.temp), (r, actual.r),
+            (g, actual.g), (b, actual.b), (c, actual.c), (w, actual.w)].allSatisfy { wanted, got in
+      guard let wanted else { return true }
+      guard let got else { return false }
+      return abs(wanted - got) <= 1
+    }
+  }
 }
 
 enum RoomConfig {

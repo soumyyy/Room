@@ -11,6 +11,8 @@ export type WizPilotStatus = {
   g: number | null;
   b: number | null;
   temp: number | null;
+  c?: number | null;
+  w?: number | null;
 };
 
 export type WizCommandResult = {
@@ -77,11 +79,13 @@ export async function sendWizCommand(
         ['r', status.r],
         ['g', status.g],
         ['b', status.b],
+        ['c', status.c],
+        ['w', status.w],
       ] as const;
 
       const valuesMatch = expected.every(([key, actual]) => {
         const requested = params[key];
-        return typeof requested !== 'number' || (actual !== null && Math.abs(actual - requested) <= 1);
+        return typeof requested !== 'number' || (actual != null && Math.abs(actual - requested) <= 1);
       });
 
       return valuesMatch ? [bulb.id] : [];

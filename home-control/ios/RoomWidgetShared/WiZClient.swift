@@ -24,9 +24,8 @@ private final class SendGate: @unchecked Sendable {
 actor WiZClient {
   static let shared = WiZClient()
 
-  /// Sends `pilot` to every bulb. Unreachable bulbs are tolerated — the call
-  /// only throws when no bulb at all accepted the command, so one sleeping
-  /// light can't fail the whole widget action.
+  /// Every addressed bulb must confirm. Successful bulbs are recorded even
+  /// when a sibling fails, allowing a scene to retry only its unfinished work.
   func apply(_ pilot: WizPilot, to bulbs: [BulbConfig]) async throws {
     guard !bulbs.isEmpty else { return }
 
@@ -51,17 +50,29 @@ actor WiZClient {
       return collected
     }
 
-    if failures.count == bulbs.count, let first = failures.first {
+    if let first = failures.first {
       throw first
     }
   }
 
   private func sendPilot(_ pilot: WizPilot, to host: String) async throws {
     let payload = try JSONEncoder().encode(WizEnvelope(method: "setPilot", params: pilot))
-
-    try await send(payload, to: host)
-    try await Task.sleep(nanoseconds: RoomConfig.wizRetryDelayNanoseconds)
-    try? await send(payload, to: host)
+    for attempt in 0..<2 {
+      let began = Date()
+      try await send(payload, to: host)
+      try await Task.sleep(nanoseconds: 200_000_000)
+      if let actual = try? await readPilot(from: host) {
+        if let bulb = RoomConfig.bulbs.first(where: { $0.ip == host }) {
+          RoomSnapshotStore.update(keys: ["bulb:" + bulb.id], observedAt: began) {
+            if $0.bulbs == nil { $0.bulbs = [:] }
+            $0.bulbs?[bulb.id] = actual
+          }
+        }
+        if pilot.matches(actual) { return }
+      }
+      if attempt == 0 { try await Task.sleep(nanoseconds: 250_000_000) }
+    }
+    throw RoomNetworkError.wiz(message: "\(host) did not confirm the light command.")
   }
 
   private func send(_ payload: Data, to host: String) async throws {
@@ -134,27 +145,27 @@ actor WiZClient {
   /// Asks every bulb what it is doing and folds the answers into per-group
   /// state. Bulbs that stay silent are simply absent from the result, so a
   /// group nobody answered for is left alone rather than reported off.
+  func readPilots() async -> [String: WizPilot] {
+    await withTaskGroup(of: (String, WizPilot?).self) { group in
+      for bulb in RoomConfig.bulbs {
+        group.addTask { (bulb.id, try? await self.readPilot(from: bulb.ip)) }
+      }
+      var result: [String: WizPilot] = [:]
+      for await (id, reading) in group { if let reading { result[id] = reading } }
+      return result
+    }
+  }
+
   func readGroupStates() async -> [String: RoomSnapshot.LightState] {
+    let pilots = await readPilots()
     var states: [String: RoomSnapshot.LightState] = [:]
 
     for group in RoomConfig.lightGroupIDs {
       let bulbs = RoomConfig.bulbs(inGroup: group)
 
-      let readings = await withTaskGroup(of: WizReading?.self) { taskGroup -> [WizReading] in
-        for bulb in bulbs {
-          taskGroup.addTask { try? await self.readPilot(from: bulb.ip) }
-        }
+      let readings = bulbs.compactMap { pilots[$0.id] }.map { WizReading(isOn: $0.state, brightness: $0.dimming) }
 
-        var collected: [WizReading] = []
-        for await reading in taskGroup {
-          if let reading {
-            collected.append(reading)
-          }
-        }
-        return collected
-      }
-
-      if let state = RoomSnapshot.groupState(from: readings) {
+      if readings.count == bulbs.count, let state = RoomSnapshot.groupState(from: readings) {
         states[group] = state
       }
     }
@@ -162,18 +173,19 @@ actor WiZClient {
     return states
   }
 
-  private func readPilot(from host: String) async throws -> WizReading {
+  private func readPilot(from host: String) async throws -> WizPilot {
     let payload = try JSONEncoder().encode(WizEnvelope(method: "getPilot", params: WizEmptyParams()))
     let data = try await request(payload, from: host)
     let response = try JSONDecoder().decode(WizGetPilotResponse.self, from: data)
 
-    guard let result = response.result else {
+    guard let result = response.result, let state = result.state else {
       throw RoomNetworkError.wiz(message: "\(host) returned no pilot state.")
     }
 
-    return WizReading(
-      isOn: result.state ?? false,
-      brightness: result.dimming.map(RoomConfig.clampBrightness)
+    return WizPilot(
+      state: state,
+      dimming: result.dimming.map(RoomConfig.clampBrightness),
+      temp: result.temp, r: result.r, g: result.g, b: result.b, c: result.c, w: result.w
     )
   }
 
@@ -255,6 +267,12 @@ private struct WizGetPilotResponse: Decodable {
   struct Result: Decodable {
     let state: Bool?
     let dimming: Int?
+    let temp: Int?
+    let r: Int?
+    let g: Int?
+    let b: Int?
+    let c: Int?
+    let w: Int?
   }
 
   let result: Result?

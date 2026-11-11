@@ -5,6 +5,17 @@ const tokenCache = {
   value: '',
   expiresAt: 0,
 };
+let tokenRequest = null;
+
+async function fetchPayload(url, options) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    const payload = await response.json();
+    return { response, payload };
+  } finally { clearTimeout(timeout); }
+}
 
 function sha256(input) {
   return createHash('sha256').update(input).digest('hex');
@@ -56,17 +67,20 @@ async function getAccessToken(forceRefresh = false) {
   if (!forceRefresh && tokenCache.value && tokenCache.expiresAt > Date.now() + 60_000) {
     return tokenCache.value;
   }
+  if (tokenRequest) return tokenRequest;
+  tokenRequest = fetchAccessToken();
+  try { return await tokenRequest; } finally { tokenRequest = null; }
+}
 
+async function fetchAccessToken() {
   const requestPath = buildRequestPath('/v1.0/token', { grant_type: 1 });
-  const response = await fetch(`${TUYA.apiBaseUrl}${requestPath}`, {
+  const { response, payload } = await fetchPayload(`${TUYA.apiBaseUrl}${requestPath}`, {
     method: 'GET',
     headers: buildSignedHeaders({
       method: 'GET',
       requestPath,
     }),
   });
-
-  const payload = await response.json();
 
   if (!response.ok || !payload.success) {
     throw new Error(payload.msg || `Tuya token request failed with HTTP ${response.status}`);
@@ -93,13 +107,11 @@ async function tuyaRequest({ method, path, query, body }) {
       ...(bodyString ? { 'Content-Type': 'application/json' } : {}),
     };
 
-    const response = await fetch(`${TUYA.apiBaseUrl}${requestPath}`, {
+    const { response, payload } = await fetchPayload(`${TUYA.apiBaseUrl}${requestPath}`, {
       method,
       headers,
       ...(bodyString ? { body: bodyString } : {}),
     });
-
-    const payload = await response.json();
 
     if (!response.ok || !payload.success) {
       const error = new Error(payload.msg || `Tuya request failed with HTTP ${response.status}`);

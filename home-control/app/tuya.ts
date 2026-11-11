@@ -28,6 +28,7 @@ const tokenCache = {
 };
 
 const TUYA_REQUEST_TIMEOUT_MS = 8_000;
+let tokenRequest: Promise<string> | null = null;
 
 function normalizeNetworkError(error: unknown, fallback: string) {
   if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError') {
@@ -41,12 +42,14 @@ function normalizeNetworkError(error: unknown, fallback: string) {
   return error instanceof Error ? error : new Error(fallback);
 }
 
-async function fetchTuya(url: string, init: RequestInit): Promise<Response> {
+async function fetchTuya(url: string, init: RequestInit): Promise<{ response: Response; payload: Record<string, unknown> }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TUYA_REQUEST_TIMEOUT_MS);
 
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    const payload = await readPayload(response, 'Tuya request failed');
+    return { response, payload };
   } finally {
     clearTimeout(timeout);
   }
@@ -55,7 +58,8 @@ async function fetchTuya(url: string, init: RequestInit): Promise<Response> {
 async function readPayload(response: Response, fallback: string): Promise<Record<string, unknown>> {
   try {
     return (await response.json()) as Record<string, unknown>;
-  } catch {
+  } catch (error) {
+    if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError') throw error;
     throw new Error(response.ok ? 'Tuya Cloud returned an invalid response.' : fallback);
   }
 }
@@ -127,27 +131,34 @@ async function getAccessToken(forceRefresh = false): Promise<string> {
   if (!forceRefresh && tokenCache.value && tokenCache.expiresAt > Date.now() + 60_000) {
     return tokenCache.value;
   }
+  if (tokenRequest) return tokenRequest;
+  tokenRequest = requestAccessToken();
+  try { return await tokenRequest; } finally { tokenRequest = null; }
+}
 
+async function requestAccessToken(): Promise<string> {
   const requestPath = '/v1.0/token?grant_type=1';
   const headers = buildSignedHeaders({ method: 'GET', requestPath });
 
   let response: Response;
+  let payload: Record<string, unknown>;
   try {
-    response = await fetchTuya(`${TUYA_CLOUD.apiBaseUrl}${requestPath}`, {
+    ({ response, payload } = await fetchTuya(`${TUYA_CLOUD.apiBaseUrl}${requestPath}`, {
       method: 'GET',
       headers,
-    });
+    }));
   } catch (error) {
     throw normalizeNetworkError(error, 'Unable to reach Tuya Cloud.');
   }
-
-  const payload = await readPayload(response, 'Tuya token request failed');
 
   if (!response.ok || !payload.success) {
     throw new Error(errorMessage(payload, 'Tuya token request failed'));
   }
 
   const result = payload.result as Record<string, unknown>;
+  if (!result || typeof result.access_token !== 'string' || !result.access_token) {
+    throw new Error('Tuya returned an invalid token.');
+  }
   tokenCache.value = result.access_token as string;
   tokenCache.expiresAt = Date.now() + Number(result.expire_time ?? 3600) * 1000;
   return tokenCache.value;
@@ -175,17 +186,16 @@ async function tuyaRequest<T>({
     };
 
     let response: Response;
+    let payload: Record<string, unknown>;
     try {
-      response = await fetchTuya(`${TUYA_CLOUD.apiBaseUrl}${requestPath}`, {
+      ({ response, payload } = await fetchTuya(`${TUYA_CLOUD.apiBaseUrl}${requestPath}`, {
         method,
         headers,
         ...(bodyString ? { body: bodyString } : {}),
-      });
+      }));
     } catch (error) {
       throw normalizeNetworkError(error, 'Unable to reach Tuya Cloud.');
     }
-
-    const payload = await readPayload(response, 'Tuya request failed');
 
     if (!response.ok || !payload.success) {
       const error = new Error(errorMessage(payload, 'Tuya request failed')) as Error & {

@@ -337,7 +337,7 @@ export function clampWind(value: number): WindValue {
 }
 
 export function clampTemp(value: number) {
-  return Math.max(16, Math.min(30, Math.round(value)));
+  return Number.isFinite(value) ? Math.max(16, Math.min(30, Math.round(value))) : INITIAL_SCENE.temp;
 }
 
 export function normalizeStatus(status: AcStatus): AcScene {
@@ -436,7 +436,7 @@ export function nodeCommands(change: NodeChange): Array<{ code: string; value: b
 }
 
 export function clampBrightness(value: number) {
-  return Math.max(10, Math.min(100, Math.round(value)));
+  return Number.isFinite(value) ? Math.max(10, Math.min(100, Math.round(value))) : DEFAULT_BULB_BRIGHTNESS;
 }
 
 export function mergeBulbStatuses(current: BulbState[], statuses: WizPilotStatus[]) {
@@ -446,13 +446,13 @@ export function mergeBulbStatuses(current: BulbState[], statuses: WizPilotStatus
     const status = statusById.get(bulb.id);
 
     if (!status) {
-      return { ...bulb, busy: false };
+      return bulb;
     }
 
     return {
       ...bulb,
       available: status.available,
-      isOn: status.isOn,
+      isOn: status.available ? status.isOn : bulb.isOn,
       brightness:
         status.brightness === null ? bulb.brightness : clampBrightness(status.brightness),
       busy: false,

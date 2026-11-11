@@ -1,5 +1,27 @@
 import Foundation
 import Network
+@preconcurrency import Dispatch
+
+/// One-shot guard so a connection's several callbacks can only resume the
+/// continuation once, no matter which queue they arrive on.
+private final class SendGate: @unchecked Sendable {
+  private let lock = NSLock()
+  private var finished = false
+
+  func claim() -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+
+    if finished {
+      return false
+    }
+
+    finished = true
+    return true
+  }
+}
+
+
 
 actor WiZClient {
   static let shared = WiZClient()
@@ -59,10 +81,19 @@ actor WiZClient {
 
   private func sendPilot(_ pilot: WizPilot, to host: String) async throws {
     let payload = try JSONEncoder().encode(WizEnvelope(method: "setPilot", params: pilot))
-
-    try await send(payload, to: host)
-    try await Task.sleep(nanoseconds: RoomConfig.wizRetryDelayNanoseconds)
-    try await send(payload, to: host)
+    for _ in 0..<2 {
+      try await send(payload, to: host)
+      try await Task.sleep(nanoseconds: 200_000_000)
+      if let actual = try? await getPilot(from: host), actual.state == pilot.state {
+        let values = [(pilot.dimming, actual.dimming), (pilot.temp, actual.temp),
+                      (pilot.r, actual.r), (pilot.g, actual.g), (pilot.b, actual.b)]
+        if !pilot.state || values.allSatisfy({ wanted, got in
+          guard let wanted else { return true }
+          return got.map { abs($0 - wanted) <= 1 } ?? false
+        }) { return }
+      }
+    }
+    throw RoomNetworkError.wiz(message: "\(host) did not confirm the command.")
   }
 
   private func getPilot(from host: String) async throws -> WizPilot {
@@ -88,112 +119,141 @@ actor WiZClient {
   }
 
   private func send(_ payload: Data, to host: String) async throws {
-    let connection = NWConnection(
-      host: NWEndpoint.Host(host),
-      port: NWEndpoint.Port(rawValue: RoomConfig.wizPort)!,
-      using: .udp
-    )
+    guard let port = NWEndpoint.Port(rawValue: RoomConfig.wizPort) else {
+      throw RoomNetworkError.invalidURL
+    }
 
-    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-      connection.stateUpdateHandler = { state in
-        switch state {
-        case .failed(let error):
+    let connection = NWConnection(host: NWEndpoint.Host(host), port: port, using: .udp)
+    let gate = SendGate()
+    let queue = DispatchQueue.global(qos: .userInitiated)
+
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+        func finish(_ result: Result<Void, Error>) {
+          guard gate.claim() else { return }
           connection.stateUpdateHandler = nil
           connection.cancel()
-          continuation.resume(throwing: RoomNetworkError.wiz(message: error.localizedDescription))
-        case .ready:
-          connection.stateUpdateHandler = nil
-          connection.send(content: payload, completion: .contentProcessed { error in
-            connection.cancel()
-            if let error {
-              continuation.resume(throwing: RoomNetworkError.wiz(message: error.localizedDescription))
-            } else {
-              continuation.resume()
-            }
-          })
-        default:
-          break
+          continuation.resume(with: result)
         }
-      }
 
-      connection.start(queue: .global(qos: .userInitiated))
+        // A widget intent has a few seconds to live, and NWConnection will sit
+        // in .waiting or .preparing indefinitely when there is no route to the
+        // LAN. Never let either state strand the continuation.
+        let deadline = DispatchWorkItem {
+          finish(.failure(RoomNetworkError.wiz(message: "\(host) did not respond in time.")))
+        }
+        queue.asyncAfter(deadline: .now() + 2.0, execute: deadline)
+
+        connection.stateUpdateHandler = { state in
+          switch state {
+          case .ready:
+            connection.send(content: payload, completion: .contentProcessed { error in
+              deadline.cancel()
+
+              if let error {
+                finish(.failure(RoomNetworkError.wiz(message: error.localizedDescription)))
+              } else {
+                finish(.success(()))
+              }
+            })
+
+          case let .waiting(error):
+            // No route to the local network (cellular only, Wi-Fi off, or
+            // local-network permission denied). Fail fast instead of stalling.
+            deadline.cancel()
+            finish(.failure(RoomNetworkError.wiz(message: error.localizedDescription)))
+
+          case let .failed(error):
+            deadline.cancel()
+            finish(.failure(RoomNetworkError.wiz(message: error.localizedDescription)))
+
+          case .cancelled:
+            deadline.cancel()
+            finish(.failure(CancellationError()))
+
+          default:
+            break
+          }
+        }
+
+        connection.start(queue: queue)
+      }
+    } onCancel: {
+      connection.cancel()
     }
   }
 
   private func request<Response: Decodable>(_ payload: Data, to host: String) async throws -> Response {
-    let connection = NWConnection(
-      host: NWEndpoint.Host(host),
-      port: NWEndpoint.Port(rawValue: RoomConfig.wizPort)!,
-      using: .udp
-    )
+    let data = try await requestData(payload, from: host)
+    return try JSONDecoder().decode(Response.self, from: data)
+  }
+  private func requestData(_ payload: Data, from host: String) async throws -> Data {
+    guard let port = NWEndpoint.Port(rawValue: RoomConfig.wizPort) else {
+      throw RoomNetworkError.invalidURL
+    }
+
+    let connection = NWConnection(host: NWEndpoint.Host(host), port: port, using: .udp)
+    let gate = SendGate()
     let queue = DispatchQueue.global(qos: .userInitiated)
 
-    return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Response, Error>) in
-      var didResume = false
-
-      func finish(with result: Result<Response, Error>) {
-        guard !didResume else {
-          return
-        }
-
-        didResume = true
-        connection.stateUpdateHandler = nil
-        connection.cancel()
-
-        switch result {
-        case let .success(response):
-          continuation.resume(returning: response)
-        case let .failure(error):
-          continuation.resume(throwing: error)
-        }
-      }
-
-      let timeout = DispatchWorkItem {
-        finish(with: .failure(RoomNetworkError.wiz(message: "WiZ device \(host) timed out.")))
-      }
-      queue.asyncAfter(deadline: .now() + .nanoseconds(Int(RoomConfig.wizReadTimeoutNanoseconds)), execute: timeout)
-
-      connection.stateUpdateHandler = { state in
-        switch state {
-        case .failed(let error):
-          timeout.cancel()
-          finish(with: .failure(RoomNetworkError.wiz(message: error.localizedDescription)))
-        case .ready:
+    return try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
+        func finish(_ result: Result<Data, Error>) {
+          guard gate.claim() else { return }
           connection.stateUpdateHandler = nil
-          connection.send(content: payload, completion: .contentProcessed { error in
-            if let error {
-              timeout.cancel()
-              finish(with: .failure(RoomNetworkError.wiz(message: error.localizedDescription)))
-              return
-            }
-
-            connection.receiveMessage { data, _, _, error in
-              timeout.cancel()
-
-              if let error {
-                finish(with: .failure(RoomNetworkError.wiz(message: error.localizedDescription)))
-                return
-              }
-
-              guard let data else {
-                finish(with: .failure(RoomNetworkError.wiz(message: "WiZ device returned no data.")))
-                return
-              }
-
-              do {
-                let decoded = try JSONDecoder().decode(Response.self, from: data)
-                finish(with: .success(decoded))
-              } catch {
-                finish(with: .failure(RoomNetworkError.wiz(message: "Invalid WiZ response from \(host).")))
-              }
-            }
-          })
-        default:
-          break
+          connection.cancel()
+          continuation.resume(with: result)
         }
-      }
 
-      connection.start(queue: queue)
+        let deadline = DispatchWorkItem {
+          finish(.failure(RoomNetworkError.wiz(message: "\(host) did not answer in time.")))
+        }
+        queue.asyncAfter(deadline: .now() + 2.0, execute: deadline)
+
+        connection.stateUpdateHandler = { state in
+          switch state {
+          case .ready:
+            connection.send(content: payload, completion: .contentProcessed { error in
+              if let error {
+                deadline.cancel()
+                finish(.failure(RoomNetworkError.wiz(message: error.localizedDescription)))
+                return
+              }
+
+              connection.receiveMessage { data, _, _, receiveError in
+                deadline.cancel()
+
+                if let data, !data.isEmpty {
+                  finish(.success(data))
+                } else {
+                  finish(.failure(RoomNetworkError.wiz(
+                    message: receiveError?.localizedDescription ?? "\(host) sent an empty reply."
+                  )))
+                }
+              }
+            })
+
+          case let .waiting(error):
+            deadline.cancel()
+            finish(.failure(RoomNetworkError.wiz(message: error.localizedDescription)))
+
+          case let .failed(error):
+            deadline.cancel()
+            finish(.failure(RoomNetworkError.wiz(message: error.localizedDescription)))
+
+          case .cancelled:
+            deadline.cancel()
+            finish(.failure(CancellationError()))
+
+          default:
+            break
+          }
+        }
+
+        connection.start(queue: queue)
+      }
+    } onCancel: {
+      connection.cancel()
     }
   }
 }
@@ -249,7 +309,7 @@ private extension KeyedDecodingContainer {
     }
 
     if let value = try? decodeIfPresent(String.self, forKey: key) {
-      return value.flatMap(Int.init)
+      return Int(value)
     }
 
     return nil
