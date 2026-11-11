@@ -18,13 +18,35 @@ struct RoomWidgetProvider: TimelineProvider {
 
   func getTimeline(in context: Context, completion: @escaping (Timeline<RoomWidgetEntry>) -> Void) {
     Task {
-      // A timeline wake is one of the few moments this process is alive, so
-      // spend it asking the hardware rather than re-rendering what we were
-      // last told — otherwise the physical AC remote leaves the tile wrong
-      // with no way to notice.
-      let room = await RoomController.shared.refresh()
+      let stored = RoomSnapshotStore.load()
+      let room: RoomSnapshot
+      if let updatedAt = stored.updatedAt, Date().timeIntervalSince(updatedAt) < RoomConfig.widgetFreshness {
+        // A tap, Siri or the app just wrote this. Draw it now: asking the
+        // hardware again would only delay the tile, and Tuya's readback can
+        // still be reporting the scene from before the command.
+        room = stored
+      } else {
+        // Otherwise spend the wake asking the hardware, so a change made with
+        // the physical remote or a wall switch shows up. Capped, so a slow
+        // network leaves the last known state on screen instead of nothing.
+        room = await Self.refresh(within: RoomConfig.widgetRefreshBudget) ?? RoomSnapshotStore.load()
+      }
       let entry = RoomWidgetEntry(date: .now, room: room)
       completion(Timeline(entries: [entry], policy: .after(.now.addingTimeInterval(15 * 60))))
+    }
+  }
+
+  /// The refreshed room, or nil when the hardware takes longer than `seconds`.
+  private static func refresh(within seconds: TimeInterval) async -> RoomSnapshot? {
+    await withTaskGroup(of: RoomSnapshot?.self) { group in
+      group.addTask { await RoomController.shared.refresh() }
+      group.addTask {
+        try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+        return nil
+      }
+      let first = await group.next() ?? nil
+      group.cancelAll()
+      return first
     }
   }
 }
@@ -205,6 +227,7 @@ struct RoomWidgetView: View {
         .font(.system(size: 11, weight: .semibold))
         .foregroundStyle(reading.isOn ? style.label : Color.white.opacity(0.7))
         .lineLimit(1)
+        .invalidatableContent()
 
       HStack {
         Capsule()
@@ -294,6 +317,9 @@ struct RoomWidgetView: View {
         .foregroundStyle(reading.isOn ? Color.white : Color.white.opacity(0.34))
         .lineLimit(1)
         .minimumScaleFactor(0.6)
+        // Shown as pending from the tap until the timeline reloads, so a slow
+        // command reads as "working" rather than "ignored".
+        .invalidatableContent()
     }
     .padding(.horizontal, isSmall ? 10 : 13)
     .padding(.vertical, compact ? 8 : (isSmall ? 9 : 12))

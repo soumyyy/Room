@@ -21,6 +21,8 @@ import {
   isNodeConfigured,
   isTuyaConfigured,
   mergeBulbStatuses,
+  modeLabel,
+  windLabel,
   mergeNodeStatus,
   nodeCommands,
   normalizeStatus,
@@ -33,6 +35,7 @@ import {
   type NodeState,
 } from './roomDomain';
 import {
+  logAction,
   readRoomSnapshot,
   recordAcScene,
   recordLightCommand,
@@ -46,6 +49,16 @@ import {
 } from './tuya';
 import { getWizStatuses, isUsingDirectWiz, sendWizCommand } from './wizClient';
 const DEV_LIGHT_UI_PREVIEW = __DEV__;
+
+/** A WiZ command in words, for the action log. */
+function describeLight(params: Record<string, unknown>) {
+  if (params.state === false) return 'off';
+  const parts = ['on'];
+  if (typeof params.dimming === 'number') parts.push(`${params.dimming}%`);
+  if (typeof params.temp === 'number') parts.push(`${params.temp}K`);
+  if (typeof params.r === 'number') parts.push(`rgb(${params.r},${params.g},${params.b})`);
+  return parts.join(' ');
+}
 
 /** How long the Tuya cloud takes to report a relay's new state after a command. */
 const NODE_SETTLE_MS = 2000;
@@ -280,9 +293,12 @@ export function useRoomController() {
     if (!commands.length) return Promise.resolve(true);
     const operation = operations.issue(keys);
     updateNode((current) => ({ ...current, ...change, busy: true }));
+    const label = Object.entries(change).map(([key, on]) => (key === 'fan' ? 'Fan' : 'Tube') + (on ? ' on' : ' off')).join(', ');
     return operations.run(operation, async () => {
+      const began = Date.now();
       try {
         if (!await sendNodeCommands(commands)) throw new Error('Switchboard command not confirmed.');
+        logAction(label, began);
         confirmedNode.current = { ...confirmedNode.current, ...change, available: true };
         updateNode((current) => ({ ...current, available: true }));
         // Only accepted values reach the widget, never later queued intentions.
@@ -290,6 +306,7 @@ export function useRoomController() {
         nodeQuietUntilRef.current = Date.now() + NODE_SETTLE_MS;
         return true;
       } catch (error) {
+        logAction(label, began, error);
         updateNode((current) => {
           const next = { ...current };
           for (const key of keys as Array<keyof NodeChange>) {
@@ -351,16 +368,19 @@ export function useRoomController() {
     setDraft(null);
   }
 
-  function submitAcScene(nextScene: AcScene, options?: { silent?: boolean }): Promise<boolean> {
+  function submitAcScene(nextScene: AcScene, options?: { silent?: boolean; label?: string }): Promise<boolean> {
+    const label = options?.label ?? `AC ${nextScene.power ? 'on' : 'off'} · ${nextScene.temp}° ${modeLabel(nextScene.mode)}, ${windLabel(nextScene.wind)}`;
     cancelPendingCycle();
     const operation = operations.issue(['ac']);
     acRef.current = nextScene;
     setAc(nextScene);
     setAcBusy(true);
     return operations.run(operation, async () => {
+      let began = Date.now();
       try {
         const wait = acNextSendAt.current - Date.now();
         if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+        began = Date.now();
         let accepted: boolean;
         try {
           accepted = await sendAcScene(sceneToPayload(nextScene));
@@ -368,6 +388,7 @@ export function useRoomController() {
           acNextSendAt.current = Date.now() + AC_COMMAND_GAP_MS;
         }
         if (!accepted) throw new Error('AC command not confirmed.');
+        logAction(label, began);
         // Tuya's immediate readback can lag the accepted command. A later refresh
         // reconciles it; it must not replace the command with the old scene here.
         confirmedAc.current = nextScene;
@@ -376,6 +397,7 @@ export function useRoomController() {
         if (operations.isCurrent(operation, 'ac')) setAcAvailable(true);
         return true;
       } catch (error) {
+        logAction(label, began, error);
         if (operations.isCurrent(operation, 'ac')) {
           acRef.current = confirmedAc.current;
           setAc(confirmedAc.current);
@@ -416,7 +438,7 @@ export function useRoomController() {
    *  the AC back in line with the screen. */
   async function resendAc() {
     if (roomBusyRef.current) return false;
-    const ok = await submitAcScene(draftRef.current ?? acRef.current);
+    const ok = await submitAcScene(draftRef.current ?? acRef.current, { label: 'AC resend' });
     if (ok) showToast('Sent the current settings to the AC again.');
     return ok;
   }
@@ -435,6 +457,7 @@ export function useRoomController() {
     const members = bulbsForGroup(group, bulbsRef.current);
     if (!members.length) return Promise.resolve(false);
     const operation = operations.issue(members.map((b) => b.id));
+    const label = `${group.name} · ${describeLight(params)}`;
     updateBulbs((current) => current.map((b) => group.bulbIds.includes(b.id) ? { ...optimisticUpdate(b), busy: true } : b));
     return operations.run(operation, async () => {
       const began = Date.now();
@@ -463,11 +486,15 @@ export function useRoomController() {
           }
         }
         if (result.confirmedIds.length !== members.length) {
+          const missing = members.filter((b) => !result.confirmedIds.includes(b.id)).map((b) => b.name);
+          logAction(label, began, `${result.confirmedIds.length}/${members.length} confirmed; no reply from ${missing.join(', ')}`);
           if (!options?.silent) showToast(group.name + ': ' + result.confirmedIds.length + '/' + members.length + ' lights confirmed. Tap to retry.');
           return false;
         }
+        logAction(label, began);
         return true;
       } catch (error) {
+        logAction(label, began, error);
         updateBulbs((current) => current.map((b) => {
           const old = confirmedBulbs.current.find((saved) => saved.id === b.id);
           return old && operations.isCurrent(operation, b.id) ? { ...old, busy: true } : b;
@@ -693,14 +720,19 @@ export function useRoomController() {
     roomBusyRef.current = true;
     setRoomBusy(true);
     cancelPendingCycle();
+    const label = action === 'leave' ? 'Leave Room' : 'Enter Room';
+    let began = Date.now();
     try {
       await operations.idle();
+      began = Date.now();
       const report = await performRoomScene(action);
+      logAction(label, began, report.failed.length ? `needs retry: ${report.failed.join(', ')}` : undefined);
       acQuietUntil.current = Date.now() + NODE_SETTLE_MS;
       nodeQuietUntilRef.current = Date.now() + NODE_SETTLE_MS;
       acceptSceneReport(report, true);
       if (report.failed.length) showToast(report.failed.length + ' device actions need retry. Tap Retry ' + (action === 'leave' ? 'Leave' : 'Enter') + '.');
     } catch (error) {
+      logAction(label, began, error);
       showToast(error instanceof Error ? error.message : 'Room action failed. Tap to retry.');
       const report = await readSceneReport().catch(() => null);
       if (report) acceptSceneReport(report, true);

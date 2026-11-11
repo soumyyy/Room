@@ -27,4 +27,9 @@ RCT_EXTERN_METHOD(recordAC:(nonnull NSNumber *)power
 
 RCT_EXTERN_METHOD(recordLights:(nonnull NSDictionary *)payload)
 
+RCT_EXTERN_METHOD(logAction:(nonnull NSDictionary *)payload)
+RCT_EXTERN_METHOD(readActionLog:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(clearActionLog)
+
 @end

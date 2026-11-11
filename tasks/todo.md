@@ -16,11 +16,15 @@ code leaves the shown state wrong until the next command.
       native: `RoomConfig.acCommandGap`, measured from the shared snapshot's `commandedAt["ac"]`
 - [x] 3 · AC: "Resend" — app: long-press the temperature. Widget "On" and Siri "Turn AC on in Room"
       already re-send the full scene (power forced on), so no new App Shortcut (Apple caps them at 10)
-- [ ] 4 · Diagnostics: shared action log (steps, timings, failures) + hidden screen in the app
-- [ ] 5 · Widget: run intents in the app process (LiveActivityIntent) — measure the launch delay
-- [ ] 6 · Widget: persist the Tuya token in the App Group so cold processes skip the token call
-- [ ] 7 · Widget: render instantly from the snapshot; optimistic state on tap; never block on network
-- [ ] 8 · Widget/Siri: coalesce rapid AC taps into one command in RoomController
+- [x] 4 · Diagnostics: shared action log (`RoomActionLog`, App Group `room-actions.json`, 150 entries).
+      App, widget/Siri and each failed scene step write to it; an entry with no duration = process
+      killed mid-action. Long-press Enter/Leave (0.8 s) opens it; Share exports it as text
+- [ ] 5 · Widget: run intents in the app process (LiveActivityIntent) — DEFERRED until the log shows
+      "never finished" widget entries: it would boot React Native in the background on every tap
+- [x] 6 · Widget: persist the Tuya token in the App Group so cold processes skip the token call
+- [x] 7 · Widget: draw a snapshot written in the last 60 s as-is; otherwise refresh capped at 4 s;
+      `.invalidatableContent()` dims values from tap until reload
+- [x] 8 · N/A: the widget has no temperature buttons; spacing (item 2) covers repeated AC on/off
 - [ ] 9 · Bulbs: rediscover by MAC on failure, cache MAC→IP in the App Group (no rebuild)
 - [ ] 10 · Control Center / Lock Screen controls (iOS 18 ControlWidget)
 - [ ] 11 · Siri: verify "Set Room to 24 degrees" and other phrases by voice on device; clear dialogs

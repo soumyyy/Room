@@ -159,7 +159,7 @@ enum RoomSnapshotStore {
     var scene: RoomSceneState?
   }
   private static let lock = NSLock()
-  private static var directory: URL {
+  static var directory: URL {
     #if ROOM_TESTS
     if let path = ProcessInfo.processInfo.environment["ROOM_STATE_TEST_DIRECTORY"] { return URL(fileURLWithPath: path) }
     #endif
@@ -288,4 +288,77 @@ enum RoomSnapshotStore {
     return fd
   }
   static func releaseSceneLock(_ fd: Int32) { flock(fd, LOCK_UN); close(fd) }
+}
+
+/// One user action, from whichever surface ran it. `milliseconds` stays nil
+/// until the action finishes, so an entry left without it means the process
+/// was killed mid-action, which is the widget's most likely failure.
+struct RoomActionRecord: Codable, Equatable {
+  var id: String
+  var at: Date
+  var action: String
+  var source: String
+  var milliseconds: Int?
+  var error: String?
+}
+
+/// A short rolling log in the App Group, written by the app, the widget and
+/// Siri, read by the app's Diagnostics screen.
+enum RoomActionLog {
+  static let limit = 150
+  private static let lock = NSLock()
+  private static var file: URL { RoomSnapshotStore.directory.appendingPathComponent("room-actions.json") }
+
+  /// The extension serves both widget buttons and Siri, so it cannot tell
+  /// them apart; it can tell whether the intent ran in the app or the extension.
+  static var currentSource: String {
+    Bundle.main.bundleURL.pathExtension == "appex" ? "widget/Siri (extension)" : "widget/Siri (app process)"
+  }
+
+  private static func coordinated<T>(_ body: () -> T) -> T {
+    lock.lock()
+    defer { lock.unlock() }
+    try? FileManager.default.createDirectory(at: RoomSnapshotStore.directory, withIntermediateDirectories: true)
+    let fd = open(RoomSnapshotStore.directory.appendingPathComponent("actions.lock").path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
+    if fd >= 0 { flock(fd, LOCK_EX) }
+    defer { if fd >= 0 { flock(fd, LOCK_UN); close(fd) } }
+    return body()
+  }
+
+  private static func read() -> [RoomActionRecord] {
+    guard let data = try? Data(contentsOf: file) else { return [] }
+    return (try? JSONDecoder().decode([RoomActionRecord].self, from: data)) ?? []
+  }
+
+  static func entries() -> [RoomActionRecord] { coordinated { read() } }
+
+  /// Inserts the record, or replaces the one with the same id.
+  static func save(_ record: RoomActionRecord) {
+    coordinated {
+      var all = read().filter { $0.id != record.id }
+      all.append(record)
+      all.sort { $0.at < $1.at }
+      if all.count > limit { all.removeFirst(all.count - limit) }
+      try? JSONEncoder().encode(all).write(to: file, options: .atomic)
+    }
+  }
+
+  static func clear() { coordinated { try? FileManager.default.removeItem(at: file) } }
+
+  /// Records the start first, so an action the system kills still shows up.
+  static func run<T>(_ action: String, source: String = currentSource, _ body: () async throws -> T) async rethrows -> T {
+    var record = RoomActionRecord(id: UUID().uuidString, at: Date(), action: action, source: source)
+    save(record)
+    do {
+      let value = try await body()
+      record.milliseconds = Int(Date().timeIntervalSince(record.at) * 1000)
+      save(record)
+      return value
+    } catch {
+      record.milliseconds = Int(Date().timeIntervalSince(record.at) * 1000)
+      record.error = error.localizedDescription
+      save(record)
+      throw error
+    }
+  }
 }

@@ -157,6 +157,32 @@ final class RoomSnapshotBridge: NSObject {
     reload()
   }
 
+  /// A finished action from the React Native side; native intents log themselves.
+  @objc(logAction:)
+  func logAction(_ payload: NSDictionary) {
+    guard let action = payload["action"] as? String,
+          let startedAt = payload["startedAt"] as? Double else { return }
+    RoomActionLog.save(RoomActionRecord(
+      id: UUID().uuidString,
+      at: Date(timeIntervalSince1970: startedAt / 1000),
+      action: action,
+      source: "app",
+      milliseconds: (payload["milliseconds"] as? NSNumber)?.intValue,
+      error: payload["error"] as? String
+    ))
+  }
+
+  /// The shared action log as a JSON array, oldest first.
+  @objc(readActionLog:reject:)
+  func readActionLog(_ resolve: @escaping (Any?) -> Void, reject: @escaping (String?, String?, Error?) -> Void) {
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .millisecondsSince1970
+    do { resolve(String(data: try encoder.encode(RoomActionLog.entries()), encoding: .utf8)) }
+    catch { reject("log_read", error.localizedDescription, error) }
+  }
+
+  @objc func clearActionLog() { RoomActionLog.clear() }
+
   private func reload() {
     WidgetCenter.shared.reloadTimelines(ofKind: RoomConfig.widgetKind)
   }

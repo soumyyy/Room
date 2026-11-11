@@ -54,8 +54,16 @@ actor RoomController {
     await withTaskGroup(of: (String, String?).self) { group in
       for key in targets {
         group.addTask {
+          let began = Date()
           do { try await self.sceneDevice(key, leaving: leaving, restore: restore); return (key, nil) }
-          catch { return (key, error.localizedDescription) }
+          catch {
+            // The scene's own entry only says that something failed; this says what.
+            RoomActionLog.save(RoomActionRecord(
+              id: UUID().uuidString, at: began, action: (leaving ? "Leave Room · " : "Enter Room · ") + key,
+              source: "scene step", milliseconds: Int(Date().timeIntervalSince(began) * 1000),
+              error: error.localizedDescription))
+            return (key, error.localizedDescription)
+          }
         }
       }
       for await (key, error) in group {

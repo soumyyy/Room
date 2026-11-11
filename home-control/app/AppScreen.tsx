@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React from 'react';
 import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import ColorSheet from './components/ColorSheet';
+import DiagnosticsSheet from './components/DiagnosticsSheet';
 import { CycleButton, FanGlyph, MergeButton, PowerButton, Segmented, StepButton, Temperature, Tile, TubeGlyph, ui } from './components/RoomUi';
 import { applyFont } from './fonts';
 import { clamp, theme } from './theme';
@@ -49,6 +50,7 @@ export default function AppScreen() {
     enterRoom,
   } = controller;
   const insets = useSafeAreaInsets();
+  const [diagnosticsOpen, setDiagnosticsOpen] = React.useState(false);
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
 
   const roomActionLabel = controller.sceneFailures.length
@@ -327,6 +329,9 @@ export default function AppScreen() {
         accessibilityState={{ busy: roomBusy, disabled: roomBusy }}
         disabled={roomBusy}
         onPress={() => (inRoom ? leaveRoom() : enterRoom())}
+        // Hidden on purpose: a long press opens the action log.
+        onLongPress={() => setDiagnosticsOpen(true)}
+        delayLongPress={800}
         style={({ pressed }) => [
           screen.roomButton,
           inRoom ? null : screen.roomButtonEnter,
@@ -353,6 +358,8 @@ export default function AppScreen() {
         onApplyPreset={applySheetPreset}
         onClose={() => setColorSheetGroupId(null)}
       />
+
+      <DiagnosticsSheet visible={diagnosticsOpen} onClose={() => setDiagnosticsOpen(false)} />
 
       {/* ── Splash ────────────────────────────────────────────────────── */}
       {showSplash ? (

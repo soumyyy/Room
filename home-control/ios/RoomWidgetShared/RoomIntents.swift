@@ -177,7 +177,7 @@ struct EnterRoomIntent: AppIntent {
 
   func perform() async throws -> some IntentResult {
     defer { RoomIntentSupport.reloadWidget() }
-    try await RoomController.shared.enterRoom()
+    try await logged { try await RoomController.shared.enterRoom() }
     return .result()
   }
 }
@@ -190,7 +190,7 @@ struct LeaveRoomIntent: AppIntent {
 
   func perform() async throws -> some IntentResult {
     defer { RoomIntentSupport.reloadWidget() }
-    try await RoomController.shared.leaveRoom()
+    try await logged { try await RoomController.shared.leaveRoom() }
     return .result()
   }
 }
@@ -204,7 +204,7 @@ struct ACOnIntent: AppIntent {
   static let isDiscoverable = true
 
   func perform() async throws -> some IntentResult {
-    try await RoomController.shared.acOn()
+    try await logged { try await RoomController.shared.acOn() }
     RoomIntentSupport.reloadWidget()
     return .result()
   }
@@ -217,7 +217,7 @@ struct ACOffIntent: AppIntent {
   static let isDiscoverable = true
 
   func perform() async throws -> some IntentResult {
-    try await RoomController.shared.acOff()
+    try await logged { try await RoomController.shared.acOff() }
     RoomIntentSupport.reloadWidget()
     return .result()
   }
@@ -236,7 +236,7 @@ struct SetACTemperatureIntent: AppIntent {
   var temperature: ACTemperature
 
   func perform() async throws -> some IntentResult & ProvidesDialog {
-    let scene = try await RoomController.shared.setACTemperature(temperature.rawValue)
+    let scene = try await logged(detail: "\(temperature.rawValue)°") { try await RoomController.shared.setACTemperature(temperature.rawValue) }
     RoomIntentSupport.reloadWidget()
     return .result(dialog: IntentDialog(stringLiteral: "AC set to \(scene.temp) degrees."))
   }
@@ -255,7 +255,7 @@ struct AdjustACTemperatureIntent: AppIntent {
   var shift: TemperatureShift
 
   func perform() async throws -> some IntentResult & ProvidesDialog {
-    let scene = try await RoomController.shared.adjustACTemperature(by: shift.delta)
+    let scene = try await logged(detail: shift.rawValue) { try await RoomController.shared.adjustACTemperature(by: shift.delta) }
     RoomIntentSupport.reloadWidget()
     return .result(dialog: IntentDialog(stringLiteral: "AC set to \(scene.temp) degrees."))
   }
@@ -274,7 +274,7 @@ struct SetACModeIntent: AppIntent {
   var mode: ACModeOption
 
   func perform() async throws -> some IntentResult {
-    try await RoomController.shared.setACMode(mode.rawValue)
+    try await logged(detail: "\(mode)") { try await RoomController.shared.setACMode(mode.rawValue) }
     RoomIntentSupport.reloadWidget()
     return .result()
   }
@@ -293,7 +293,7 @@ struct SetFanSpeedIntent: AppIntent {
   var speed: FanSpeedOption
 
   func perform() async throws -> some IntentResult {
-    try await RoomController.shared.setFanSpeed(speed.rawValue)
+    try await logged(detail: "\(speed)") { try await RoomController.shared.setFanSpeed(speed.rawValue) }
     RoomIntentSupport.reloadWidget()
     return .result()
   }
@@ -308,7 +308,7 @@ struct FanOnIntent: AppIntent {
   static let isDiscoverable = true
 
   func perform() async throws -> some IntentResult {
-    try await RoomController.shared.setFan(true)
+    try await logged { try await RoomController.shared.setFan(true) }
     RoomIntentSupport.reloadWidget()
     return .result()
   }
@@ -321,7 +321,7 @@ struct FanOffIntent: AppIntent {
   static let isDiscoverable = true
 
   func perform() async throws -> some IntentResult {
-    try await RoomController.shared.setFan(false)
+    try await logged { try await RoomController.shared.setFan(false) }
     RoomIntentSupport.reloadWidget()
     return .result()
   }
@@ -334,7 +334,7 @@ struct TubeOnIntent: AppIntent {
   static let isDiscoverable = true
 
   func perform() async throws -> some IntentResult {
-    try await RoomController.shared.setTube(true)
+    try await logged { try await RoomController.shared.setTube(true) }
     RoomIntentSupport.reloadWidget()
     return .result()
   }
@@ -347,7 +347,7 @@ struct TubeOffIntent: AppIntent {
   static let isDiscoverable = true
 
   func perform() async throws -> some IntentResult {
-    try await RoomController.shared.setTube(false)
+    try await logged { try await RoomController.shared.setTube(false) }
     RoomIntentSupport.reloadWidget()
     return .result()
   }
@@ -368,7 +368,7 @@ struct LightsOnIntent: AppIntent {
   var group: LightGroup
 
   func perform() async throws -> some IntentResult {
-    try await RoomController.shared.lightsOn(group: group.configGroup)
+    try await logged(detail: group.rawValue) { try await RoomController.shared.lightsOn(group: group.configGroup) }
     RoomIntentSupport.reloadWidget()
     return .result()
   }
@@ -387,7 +387,7 @@ struct LightsOffIntent: AppIntent {
   var group: LightGroup
 
   func perform() async throws -> some IntentResult {
-    try await RoomController.shared.lightsOff(group: group.configGroup)
+    try await logged(detail: group.rawValue) { try await RoomController.shared.lightsOff(group: group.configGroup) }
     RoomIntentSupport.reloadWidget()
     return .result()
   }
@@ -409,7 +409,7 @@ struct SetLightBrightnessIntent: AppIntent {
   var level: BrightnessStep
 
   func perform() async throws -> some IntentResult {
-    try await RoomController.shared.setBrightness(level.rawValue, group: group.configGroup)
+    try await logged(detail: "\(group.rawValue) \(level.rawValue)%") { try await RoomController.shared.setBrightness(level.rawValue, group: group.configGroup) }
     RoomIntentSupport.reloadWidget()
     return .result()
   }
@@ -431,9 +431,19 @@ struct SetLightColorIntent: AppIntent {
   var color: LightColorOption
 
   func perform() async throws -> some IntentResult {
-    try await RoomController.shared.setPreset(color.rawValue, group: group.configGroup)
+    try await logged(detail: "\(group.rawValue) \(color.rawValue)") { try await RoomController.shared.setPreset(color.rawValue, group: group.configGroup) }
     RoomIntentSupport.reloadWidget()
     return .result()
+  }
+}
+
+@available(iOS 16.0, *)
+extension AppIntent {
+  /// Runs `body` under the shared action log, named after the intent.
+  @discardableResult
+  func logged<T>(detail: String? = nil, _ body: () async throws -> T) async throws -> T {
+    let name = String(localized: Self.title)
+    return try await RoomActionLog.run(detail.map { name + " · " + $0 } ?? name, body)
   }
 }
 

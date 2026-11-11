@@ -114,6 +114,22 @@ actor WiZClient {
     try await RoomController.shared.setACTemperature(24)
     check(Date().timeIntervalSince(firstSent) >= RoomConfig.acCommandGap - 0.05, "AC commands must be spaced out")
     check(RoomSnapshotStore.load().ac?.temp == 24, "Spaced command still lands")
+    // Action log: the failed leave above names the device that failed.
+    check(RoomActionLog.entries().contains { $0.action == "Leave Room · bulb:" + failedID && $0.error != nil },
+          "Scene step failures are logged per device")
+    RoomActionLog.clear()
+    try await RoomActionLog.run("ok action") { }
+    do { try await RoomActionLog.run("bad action") { throw NSError(domain: "test", code: 1, userInfo: [NSLocalizedDescriptionKey: "hub offline"]) } } catch {}
+    let log = RoomActionLog.entries()
+    check(log.count == 2, "Start and finish share one entry")
+    check(log[0].action == "ok action" && log[0].milliseconds != nil && log[0].error == nil, "Success records a duration")
+    check(log[1].error?.contains("hub offline") == true, "Failure records its reason")
+    RoomActionLog.save(RoomActionRecord(id: "killed", at: Date(), action: "killed", source: "test"))
+    check(RoomActionLog.entries().last?.milliseconds == nil, "An unfinished action stays visible")
+    for index in 0..<(RoomActionLog.limit + 5) {
+      RoomActionLog.save(RoomActionRecord(id: "\(index)", at: Date(), action: "a", source: "test", milliseconds: 1))
+    }
+    check(RoomActionLog.entries().count == RoomActionLog.limit, "The log is capped")
     print("scene retries, saved restore state, per-device freshness and cross-process persistence: passed")
   }
 }

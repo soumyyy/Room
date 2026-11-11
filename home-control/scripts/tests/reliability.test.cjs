@@ -109,9 +109,10 @@ function controllerHarness(overrides = {}) {
       return [cells[i], (value) => { cells[i] = typeof value === 'function' ? value(cells[i]) : value; }];
     },
   };
-  const sent = [], nodeSent = [], records = [];
+  const sent = [], nodeSent = [], records = [], logged = [];
   const snapshot = {
     readRoomSnapshot: async () => null, readSceneReport: async () => null,
+    logAction: (action, startedAt, error) => logged.push({ action, startedAt, error }),
     recordAcScene: (scene) => records.push(scene), recordNodeChange() {}, recordBulbReadings() {}, recordLightCommand() {},
     ...overrides.snapshot,
   };
@@ -129,7 +130,7 @@ function controllerHarness(overrides = {}) {
     './deviceOperations': load('app/deviceOperations.ts'), './config': config, './roomDomain': domain,
     './roomSnapshot': snapshot, './tuya': tuya, './wizClient': wiz,
   }, { ...clock, __DEV__: false });
-  return { render() { cursor = 0; return useRoomController(); }, clock, sent, nodeSent, records, domain, config };
+  return { render() { cursor = 0; return useRoomController(); }, clock, sent, nodeSent, records, logged, domain, config };
 }
 
 /** Runs fake timers (debounce, command spacing) until the controller goes quiet. */
@@ -195,6 +196,21 @@ test('resend transmits the current scene unchanged', async () => {
   assert.equal(h.sent.length, 2);
   assert.deepEqual(h.sent[1], h.sent[0]);
   assert.match(h.render().toast, /again/);
+});
+
+test('app actions land in the shared action log, failures with their reason', async () => {
+  let fail = false;
+  const h = controllerHarness({ tuya: { sendAcScene: async () => { if (fail) throw new Error('hub offline'); return true; } } });
+  await settle(h, h.render().changeAc({ power: 1, temp: 24 }));
+  assert.equal(h.logged.length, 1);
+  assert.match(h.logged[0].action, /AC on · 24°/);
+  assert.equal(h.logged[0].error, undefined);
+  fail = true;
+  await settle(h, h.render().resendAc());
+  assert.match(h.logged[1].action, /AC resend/);
+  assert.match(String(h.logged[1].error), /hub offline/);
+  await settle(h, h.render().toggleNode('fan'));
+  assert.match(h.logged[2].action, /Fan on/);
 });
 
 test('failed first fan request cannot roll back a later on/off/on sequence', async () => {

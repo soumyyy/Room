@@ -17,9 +17,24 @@ private struct TuyaTokenResult: Decodable {
   let expire_time: Int
 }
 
-private struct TuyaTokenCache: Sendable {
+/// Kept in the App Group, not just in memory: every widget tap and Siri
+/// request can start a fresh extension process, and without this each one
+/// paid an extra token round trip before it could touch the AC.
+private struct TuyaTokenCache: Codable, Sendable {
   var accessToken: String = ""
   var expiresAt: Date = .distantPast
+
+  private static let key = "tuya.accessToken"
+
+  static func load() -> TuyaTokenCache {
+    guard let data = UserDefaults(suiteName: RoomConfig.appGroupID)?.data(forKey: key),
+          let cache = try? JSONDecoder().decode(TuyaTokenCache.self, from: data) else { return TuyaTokenCache() }
+    return cache
+  }
+
+  func save() {
+    UserDefaults(suiteName: RoomConfig.appGroupID)?.set(try? JSONEncoder().encode(self), forKey: Self.key)
+  }
 }
 
 /// Tuya reports scene fields as numbers on some remotes and as numeric strings
@@ -122,7 +137,7 @@ actor TuyaClient {
   static let shared = TuyaClient()
 
   private let session = URLSession.shared
-  private var tokenCache = TuyaTokenCache()
+  private var tokenCache = TuyaTokenCache.load()
   private var tokenTask: Task<String, Error>?
 
   func sendACScene(_ scene: AcScene) async throws {
@@ -214,6 +229,7 @@ actor TuyaClient {
       )
     } catch let error as NSError where error.domain == "RoomTuya" && (error.code == 1010 || error.code == 1011) {
       tokenCache = TuyaTokenCache()
+      tokenCache.save()
       return try await performRequest(
         method: method,
         path: path,
@@ -309,6 +325,7 @@ actor TuyaClient {
 
     tokenCache.accessToken = result.access_token
     tokenCache.expiresAt = Date().addingTimeInterval(TimeInterval(result.expire_time))
+    tokenCache.save()
     return result.access_token
   }
 

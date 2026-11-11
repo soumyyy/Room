@@ -23,6 +23,9 @@ type RoomSnapshotBridge = {
   readAway(): Promise<unknown>;
   saveAway(json: string | null): void;
   recordNode(tube: boolean, fan: boolean): void;
+  logAction?(payload: { action: string; startedAt: number; milliseconds: number; error?: string }): void;
+  readActionLog?(): Promise<string>;
+  clearActionLog?(): void;
   recordLights(payload: {
     groups: string[];
     isOn: boolean;
@@ -191,5 +194,47 @@ export function saveAwayState(json: string | null) {
     bridge.saveAway(json);
   } catch {
     // A failed save costs the restore after a restart, not the room.
+  }
+}
+
+/** One entry in the log shared with the widget and Siri. `milliseconds` is
+ *  null when the action never finished: its process was killed mid-action. */
+export type ActionRecord = {
+  id: string;
+  at: number;
+  action: string;
+  source: string;
+  milliseconds?: number | null;
+  error?: string | null;
+};
+
+/** Records a finished app action. Never throws: diagnostics must not break control. */
+export function logAction(action: string, startedAt: number, error?: unknown) {
+  try {
+    bridge?.logAction?.({
+      action,
+      startedAt,
+      milliseconds: Date.now() - startedAt,
+      ...(error === undefined ? {} : { error: error instanceof Error ? error.message : String(error) }),
+    });
+  } catch {
+    // Diagnostics only.
+  }
+}
+
+export async function readActionLog(): Promise<ActionRecord[]> {
+  try {
+    const json = await bridge?.readActionLog?.();
+    return json ? (JSON.parse(json) as ActionRecord[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function clearActionLog() {
+  try {
+    bridge?.clearActionLog?.();
+  } catch {
+    // Diagnostics only.
   }
 }

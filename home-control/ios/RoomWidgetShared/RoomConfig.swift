@@ -135,6 +135,12 @@ enum RoomConfig {
   /// Siri. Codes sent back to back get dropped, and IR cannot report the loss.
   /// Matches AC_COMMAND_GAP_MS in app/useRoomController.ts.
   static let acCommandGap: TimeInterval = 1.0
+  /// A snapshot written this recently is drawn as-is by the widget, without
+  /// asking the hardware again.
+  static let widgetFreshness: TimeInterval = 60
+  /// How long a widget refresh may wait on the hardware before it draws the
+  /// last known state instead.
+  static let widgetRefreshBudget: TimeInterval = 4
 
   static let minTemp = 16
   static let maxTemp = 30
