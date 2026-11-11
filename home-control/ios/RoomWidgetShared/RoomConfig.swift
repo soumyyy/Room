@@ -131,6 +131,10 @@ enum RoomConfig {
   static let wizSendTimeout: TimeInterval = 2.0
   /// URLSession defaults to 60s, which is longer than a widget refresh lives.
   static let tuyaRequestTimeout: TimeInterval = 6.0
+  /// Minimum time between IR commands to the AC, across the app, widget and
+  /// Siri. Codes sent back to back get dropped, and IR cannot report the loss.
+  /// Matches AC_COMMAND_GAP_MS in app/useRoomController.ts.
+  static let acCommandGap: TimeInterval = 1.0
 
   static let minTemp = 16
   static let maxTemp = 30

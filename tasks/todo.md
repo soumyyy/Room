@@ -1,3 +1,38 @@
+# Room 1.3 — reliability, Siri, Alexa (planned 2026-11-12)
+
+Constraints: no always-on hub, no HomePod/Apple TV, no Echo yet. Siri phrases keep the app name
+("Set Room to 24 degrees") — accepted. Alexa comes later, cloud-to-cloud, through the Alexa iPhone app.
+
+Reported failures: AC temperature taps sometimes do nothing; displayed state is sometimes wrong.
+Cause (from code, not yet reproduced): temperature sends one IR command per tap with no debounce
+(`app/useRoomController.ts` `stepTemperature`), unlike mode/wind (600 ms). IR is one-way, so a missed
+code leaves the shown state wrong until the next command.
+
+## Phase 1 — new build
+
+- [x] 0 · Finish, test and commit the in-flight 1.3.0 changes (26 staged/unstaged files) — 63afa22
+- [x] 1 · AC: debounce temperature like mode/wind; one command per burst of taps (`stageAc`)
+- [x] 2 · AC: at least ~1 s between IR commands, across app, widget and Siri — app: `AC_COMMAND_GAP_MS`;
+      native: `RoomConfig.acCommandGap`, measured from the shared snapshot's `commandedAt["ac"]`
+- [x] 3 · AC: "Resend" — app: long-press the temperature. Widget "On" and Siri "Turn AC on in Room"
+      already re-send the full scene (power forced on), so no new App Shortcut (Apple caps them at 10)
+- [ ] 4 · Diagnostics: shared action log (steps, timings, failures) + hidden screen in the app
+- [ ] 5 · Widget: run intents in the app process (LiveActivityIntent) — measure the launch delay
+- [ ] 6 · Widget: persist the Tuya token in the App Group so cold processes skip the token call
+- [ ] 7 · Widget: render instantly from the snapshot; optimistic state on tap; never block on network
+- [ ] 8 · Widget/Siri: coalesce rapid AC taps into one command in RoomController
+- [ ] 9 · Bulbs: rediscover by MAC on failure, cache MAC→IP in the App Group (no rebuild)
+- [ ] 10 · Control Center / Lock Screen controls (iOS 18 ControlWidget)
+- [ ] 11 · Siri: verify "Set Room to 24 degrees" and other phrases by voice on device; clear dialogs
+
+## Alexa — later, no code
+
+- [ ] Link Smart Life skill (AC + switchboard) and WiZ skill (bulbs) in the Alexa app
+- [ ] Routines "Enter Room" / "Leave Room" (fixed values; no restore of previous state)
+- [ ] Custom Alexa skill only if Smart Life handles the IR AC badly (cloud can't reach the bulbs)
+
+---
+
 # Room — iOS widget + Expo fixes
 
 Scope: audit findings 2–5 from the 2026-09-03 audit, plus a widget redesign.

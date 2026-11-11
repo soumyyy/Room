@@ -132,21 +132,69 @@ function controllerHarness(overrides = {}) {
   return { render() { cursor = 0; return useRoomController(); }, clock, sent, nodeSent, records, domain, config };
 }
 
+/** Runs fake timers (debounce, command spacing) until the controller goes quiet. */
+async function settle(h, pending) {
+  for (let i = 0; i < 20; i++) {
+    await flush();
+    if (!h.clock.timers.size) break;
+    h.clock.fire();
+  }
+  return pending;
+}
+
 test('AC power off cancels pending mode change; temperature preserves a pending mode', async () => {
   const h = controllerHarness();
   let controller = h.render();
-  await controller.changeAc({ power: 1 });
+  await settle(h, controller.changeAc({ power: 1 }));
   controller.cycleAc('mode');
-  await controller.changeAc({ power: 0 });
-  h.clock.fire();
-  await flush();
+  await settle(h, controller.changeAc({ power: 0 }));
   assert.equal(h.sent.at(-1).power, 0);
   assert.equal(h.sent.length, 2);
   controller = h.render();
   controller.cycleAc('mode');
-  await controller.stepTemperature(1);
+  controller.stepTemperature(1);
+  await settle(h);
+  assert.equal(h.sent.length, 3);
   assert.equal(h.sent.at(-1).mode, h.domain.nextMode(h.sent.at(-2).mode));
   assert.equal(h.sent.at(-1).temp, 28);
+});
+
+test('rapid temperature taps send one command with the final value', async () => {
+  const h = controllerHarness();
+  const start = h.render().ac.temp;
+  h.render().stepTemperature(1);
+  h.render().stepTemperature(1);
+  h.render().stepTemperature(1);
+  assert.equal(h.sent.length, 0);
+  assert.equal(h.render().draft.temp, start + 3);
+  await settle(h);
+  assert.equal(h.sent.length, 1);
+  assert.equal(h.sent[0].temp, start + 3);
+  assert.equal(h.sent[0].power, 1);
+});
+
+test('AC commands wait for the gap after the previous one', async () => {
+  const h = controllerHarness();
+  await settle(h, h.render().changeAc({ power: 1 }));
+  const second = h.render().changeAc({ power: 0 });
+  await flush();
+  assert.equal(h.sent.length, 1);
+  assert.equal(h.clock.timers.size, 1);
+  await settle(h, second);
+  assert.equal(h.sent.length, 2);
+});
+
+test('resend transmits the current scene unchanged', async () => {
+  const h = controllerHarness();
+  await settle(h, h.render().changeAc({ power: 1, temp: 24 }));
+  const pending = h.render().resendAc();
+  await flush();
+  h.clock.fire(); // the command gap; the toast's dismiss timer is not set yet
+  const ok = await pending;
+  assert.equal(ok, true);
+  assert.equal(h.sent.length, 2);
+  assert.deepEqual(h.sent[1], h.sent[0]);
+  assert.match(h.render().toast, /again/);
 });
 
 test('failed first fan request cannot roll back a later on/off/on sequence', async () => {

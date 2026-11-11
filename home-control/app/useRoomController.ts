@@ -49,6 +49,11 @@ const DEV_LIGHT_UI_PREVIEW = __DEV__;
 
 /** How long the Tuya cloud takes to report a relay's new state after a command. */
 const NODE_SETTLE_MS = 2000;
+/** Quiet period after the last AC tap before one command goes out. */
+const AC_SETTLE_MS = 600;
+/** Minimum time between IR commands. The blaster and the AC drop codes that
+ *  arrive back to back, and IR is one-way, so a dropped code goes unnoticed. */
+const AC_COMMAND_GAP_MS = 1000;
 
 export function useRoomController() {
   const operations = useRef(new DeviceOperations()).current;
@@ -81,15 +86,16 @@ export function useRoomController() {
   const confirmedNode = useRef(node);
   const nodeQuietUntilRef = useRef(0);
   const nodeVerifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Mode and Airflow step through a list on each tap. The display moves at once
-  // (`draft`) and one command goes out after the taps stop, so a quick double
-  // tap never sends the value it passed through.
+  // Temperature, Mode and Airflow change on each tap. The display moves at once
+  // (`draft`) and one command goes out after the taps stop, so a quick run of
+  // taps never sends the values it passed through.
   const [draft, setDraft] = useState<AcScene | null>(null);
   const draftRef = useRef<AcScene | null>(null);
   const cycleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const acRef = useRef(ac);
   const confirmedAc = useRef(ac);
   const acQuietUntil = useRef(0);
+  const acNextSendAt = useRef(0);
   const [toast, setToast] = useState<string | null>(null);
   const [showSplash, setShowSplash] = useState(true);
   const [colorSheetGroupId, setColorSheetGroupId] = useState<string | null>(null);
@@ -104,7 +110,7 @@ export function useRoomController() {
   const acDisabled = !tuyaReady || roomBusy || loadingStatus;
   const nodeReady = isNodeConfigured();
 
-  function showErrorToast(message: string) {
+  function showToast(message: string) {
     if (toastTimerRef.current) {
       clearTimeout(toastTimerRef.current);
     }
@@ -121,7 +127,7 @@ export function useRoomController() {
     const read = operations.read(['ac']);
     if (operations.isPending('ac') || draftRef.current || roomBusyRef.current || Date.now() < acQuietUntil.current) return;
     if (!tuyaReady) {
-      showErrorToast('AC control is not configured.');
+      showToast('AC control is not configured.');
       setLoadingStatus(false);
       return;
     }
@@ -141,7 +147,7 @@ export function useRoomController() {
         setAcAvailable(deviceResult.value.online);
 
         if (!deviceResult.value.online && !options?.silent) {
-          showErrorToast('AC infrared hub is offline.');
+          showToast('AC infrared hub is offline.');
         }
       }
 
@@ -164,7 +170,7 @@ export function useRoomController() {
     } catch (error) {
       if (!options?.silent) {
         const message = error instanceof Error ? error.message : 'Unable to reach Tuya Cloud';
-        showErrorToast(message);
+        showToast(message);
       }
     } finally {
       if (options?.showLoader ?? true) {
@@ -196,7 +202,7 @@ export function useRoomController() {
         error instanceof Error
           ? error.message
           : 'Unable to reach the lights';
-      showErrorToast(message);
+      showToast(message);
     }
   }
 
@@ -245,7 +251,7 @@ export function useRoomController() {
     } catch (error) {
       if (!options?.silent) {
         const message = error instanceof Error ? error.message : 'Unable to reach the switchboard';
-        showErrorToast(message);
+        showToast(message);
       }
     }
   }
@@ -291,7 +297,7 @@ export function useRoomController() {
           }
           return next;
         });
-        if (!options?.silent) showErrorToast(error instanceof Error ? error.message : 'Switchboard command failed');
+        if (!options?.silent) showToast(error instanceof Error ? error.message : 'Switchboard command failed');
         return false;
       }
     }).finally(() => {
@@ -333,7 +339,7 @@ export function useRoomController() {
         error instanceof Error
           ? error.message
           : 'Unable to verify light status';
-      showErrorToast(message);
+      showToast(message);
       return null;
     }
   }
@@ -353,7 +359,15 @@ export function useRoomController() {
     setAcBusy(true);
     return operations.run(operation, async () => {
       try {
-        if (!await sendAcScene(sceneToPayload(nextScene))) throw new Error('AC command not confirmed.');
+        const wait = acNextSendAt.current - Date.now();
+        if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+        let accepted: boolean;
+        try {
+          accepted = await sendAcScene(sceneToPayload(nextScene));
+        } finally {
+          acNextSendAt.current = Date.now() + AC_COMMAND_GAP_MS;
+        }
+        if (!accepted) throw new Error('AC command not confirmed.');
         // Tuya's immediate readback can lag the accepted command. A later refresh
         // reconciles it; it must not replace the command with the old scene here.
         confirmedAc.current = nextScene;
@@ -367,7 +381,7 @@ export function useRoomController() {
           setAc(confirmedAc.current);
           if (error && typeof error === 'object' && 'code' in error && String(error.code) === '30003') setAcAvailable(false);
         }
-        if (!options?.silent) showErrorToast(error instanceof Error ? error.message : 'AC command failed');
+        if (!options?.silent) showToast(error instanceof Error ? error.message : 'AC command failed');
         return false;
       }
     }).finally(() => { if (mounted.current) setAcBusy(operations.isPending('ac')); });
@@ -379,9 +393,32 @@ export function useRoomController() {
     return submitAcScene(next);
   }
 
+  /** Shows `next` at once and sends it once the taps stop. */
+  function stageAc(next: AcScene) {
+    draftRef.current = next;
+    setDraft(next);
+    if (cycleTimerRef.current) clearTimeout(cycleTimerRef.current);
+    cycleTimerRef.current = setTimeout(() => {
+      cycleTimerRef.current = null;
+      const final = draftRef.current;
+      if (final) void submitAcScene(final);
+    }, AC_SETTLE_MS);
+  }
+
   function stepTemperature(delta: number) {
+    if (roomBusyRef.current) return;
     const base = draftRef.current ?? acRef.current;
-    return changeAc({ power: 1, temp: clampTemp(base.temp + delta) });
+    stageAc({ ...base, power: 1, temp: clampTemp(base.temp + delta) });
+  }
+
+  /** IR cannot report what the AC heard, so the shown scene can drift from the
+   *  real one. Every command carries the full scene, so sending it again brings
+   *  the AC back in line with the screen. */
+  async function resendAc() {
+    if (roomBusyRef.current) return false;
+    const ok = await submitAcScene(draftRef.current ?? acRef.current);
+    if (ok) showToast('Sent the current settings to the AC again.');
+    return ok;
   }
 
   function toggleAcPower() {
@@ -426,7 +463,7 @@ export function useRoomController() {
           }
         }
         if (result.confirmedIds.length !== members.length) {
-          if (!options?.silent) showErrorToast(group.name + ': ' + result.confirmedIds.length + '/' + members.length + ' lights confirmed. Tap to retry.');
+          if (!options?.silent) showToast(group.name + ': ' + result.confirmedIds.length + '/' + members.length + ' lights confirmed. Tap to retry.');
           return false;
         }
         return true;
@@ -435,7 +472,7 @@ export function useRoomController() {
           const old = confirmedBulbs.current.find((saved) => saved.id === b.id);
           return old && operations.isCurrent(operation, b.id) ? { ...old, busy: true } : b;
         }));
-        if (!options?.silent) showErrorToast(error instanceof Error ? error.message : 'WiZ command failed');
+        if (!options?.silent) showToast(error instanceof Error ? error.message : 'WiZ command failed');
         return false;
       }
     }).finally(() => {
@@ -468,7 +505,7 @@ export function useRoomController() {
     }
 
     if (!reachable.length) {
-      showErrorToast(`${group.name} unavailable`);
+      showToast(`${group.name} unavailable`);
       return;
     }
 
@@ -510,7 +547,7 @@ export function useRoomController() {
       const reachable = reachablePerGroup.flatMap((entry) => entry ?? []);
 
       if (!reachable.length) {
-        showErrorToast('Lights unavailable');
+        showToast('Lights unavailable');
         return;
       }
 
@@ -538,7 +575,7 @@ export function useRoomController() {
         error instanceof Error
           ? error.message
           : 'Unable to verify light status';
-      showErrorToast(message);
+      showToast(message);
     }
   }
 
@@ -615,25 +652,11 @@ export function useRoomController() {
   function cycleAc(field: 'mode' | 'wind') {
     if (roomBusyRef.current) return;
     const base = draftRef.current ?? acRef.current;
-    const next: AcScene = {
+    stageAc({
       ...base,
       power: 1,
       ...(field === 'mode' ? { mode: nextMode(base.mode) } : { wind: nextWind(base.wind) }),
-    };
-
-    draftRef.current = next;
-    setDraft(next);
-
-    if (cycleTimerRef.current) {
-      clearTimeout(cycleTimerRef.current);
-    }
-
-    cycleTimerRef.current = setTimeout(() => {
-      cycleTimerRef.current = null;
-      const final = draftRef.current;
-
-      if (final) void submitAcScene(final);
-    }, 600);
+    });
   }
 
   function hydrate(snapshot: StoredRoomSnapshot | null) {
@@ -676,9 +699,9 @@ export function useRoomController() {
       acQuietUntil.current = Date.now() + NODE_SETTLE_MS;
       nodeQuietUntilRef.current = Date.now() + NODE_SETTLE_MS;
       acceptSceneReport(report, true);
-      if (report.failed.length) showErrorToast(report.failed.length + ' device actions need retry. Tap Retry ' + (action === 'leave' ? 'Leave' : 'Enter') + '.');
+      if (report.failed.length) showToast(report.failed.length + ' device actions need retry. Tap Retry ' + (action === 'leave' ? 'Leave' : 'Enter') + '.');
     } catch (error) {
-      showErrorToast(error instanceof Error ? error.message : 'Room action failed. Tap to retry.');
+      showToast(error instanceof Error ? error.message : 'Room action failed. Tap to retry.');
       const report = await readSceneReport().catch(() => null);
       if (report) acceptSceneReport(report, true);
     } finally {
@@ -723,7 +746,7 @@ export function useRoomController() {
         ]).start(() => { if (!disposed) setShowSplash(false); });
       }
     }
-    void boot().catch((error) => { if (!disposed) showErrorToast(String(error)); });
+    void boot().catch((error) => { if (!disposed) showToast(String(error)); });
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') void refreshLatest.current();
     });
@@ -746,6 +769,7 @@ export function useRoomController() {
     toggleAcPower,
     changeAc,
     stepTemperature,
+    resendAc,
     scenePhase,
     sceneFailures,
     ac,

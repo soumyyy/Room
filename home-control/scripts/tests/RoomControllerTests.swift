@@ -108,6 +108,12 @@ actor WiZClient {
     check(combined.ac?.temp == 30 && combined.node?.tube == true, "Cross-process updates must preserve both devices")
     check(WizPilot(state: true, dimming: 40).matches(WizPilot(state: true, dimming: 40)), "Matching WiZ readback accepted")
     check(!WizPilot(state: true, dimming: 40).matches(WizPilot(state: false, dimming: 40)), "Wrong power cannot confirm a command")
+    // Back-to-back AC commands (any process) are spaced so the IR blaster does not drop one.
+    try await RoomController.shared.acOn()
+    let firstSent = Date()
+    try await RoomController.shared.setACTemperature(24)
+    check(Date().timeIntervalSince(firstSent) >= RoomConfig.acCommandGap - 0.05, "AC commands must be spaced out")
+    check(RoomSnapshotStore.load().ac?.temp == 24, "Spaced command still lands")
     print("scene retries, saved restore state, per-device freshness and cross-process persistence: passed")
   }
 }

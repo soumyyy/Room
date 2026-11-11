@@ -178,7 +178,16 @@ export default function AppScreen() {
               onPress={() => controller.stepTemperature(-1)}
             />
           </View>
-          <Temperature value={shown.temp} size={tempSize} dimmed={acOff} />
+          {/* Long press re-sends the full scene; IR cannot tell us if the AC missed one. */}
+          <Pressable
+            disabled={acDisabled}
+            onLongPress={() => void controller.resendAc()}
+            accessibilityRole="button"
+            accessibilityLabel={`${shown.temp} degrees`}
+            accessibilityHint="Long press to send the current settings to the AC again"
+          >
+            <Temperature value={shown.temp} size={tempSize} dimmed={acOff} />
+          </Pressable>
           <View style={acOff ? ui.dimmed : null}>
             <StepButton
               label="+"

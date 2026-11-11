@@ -124,6 +124,12 @@ actor RoomController {
       if let known = RoomSnapshotStore.load().ac { current = known }
       else { current = (try? await TuyaClient.shared.fetchACScene()) ?? RoomConfig.acOnScene }
       let next = edit(current)
+      // The last send may have come from another process; the shared snapshot
+      // records it, so the gap holds across the app, widget and Siri.
+      if let last = RoomSnapshotStore.load().commandedAt?["ac"] {
+        let wait = min(RoomConfig.acCommandGap, RoomConfig.acCommandGap - Date().timeIntervalSince(last))
+        if wait > 0 { try await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
+      }
       try await self.transmitACScene(next)
       return next
     }
