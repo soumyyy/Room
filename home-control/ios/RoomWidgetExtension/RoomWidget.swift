@@ -51,6 +51,12 @@ struct RoomWidgetProvider: TimelineProvider {
   }
 }
 
+/// A tile's glyph: an SF Symbol, or the drawn tube bar, which has no symbol.
+private enum TileIcon {
+  case symbol(String)
+  case tube
+}
+
 /// Two accents, one per physical domain: amber for the WiZ bulbs and the
 /// arrive-home scene, cyan for the AC.
 private enum TileAccent {
@@ -90,9 +96,9 @@ struct RoomWidgetView: View {
 
   private var isSmall: Bool { family == .systemSmall }
 
-  /// One corner radius for every button in a layout. The medium widget is
-  /// squarer than the small one.
-  private var tileRadius: CGFloat { isSmall ? 15 : 10 }
+  /// One corner radius for every button in a layout. The small one is
+  /// concentric with the widget's own corner (about 22pt, inset by 9pt).
+  private var tileRadius: CGFloat { isSmall ? 13 : 10 }
 
   var body: some View {
     Group {
@@ -108,23 +114,21 @@ struct RoomWidgetView: View {
 
   // MARK: - Layouts
 
+  /// Four equal switches, one per device. Enter and Leave Room live on the
+  /// medium widget and Siri; at this size they cost two devices' worth of room.
   private var smallLayout: some View {
-    VStack(spacing: 7) {
-      header
-
-      HStack(spacing: 7) {
+    VStack(spacing: 6) {
+      HStack(spacing: 6) {
         acTile(compact: false)
         lightsTile
       }
-      .frame(maxHeight: .infinity)
 
-      HStack(spacing: 7) {
-        sceneButton("Enter", symbol: "door.left.hand.open", intent: EnterRoomIntent())
-        sceneButton("Leave", symbol: "figure.walk.departure", intent: LeaveRoomIntent())
+      HStack(spacing: 6) {
+        fanTile(compact: false)
+        tubeTile
       }
-      .frame(height: 32)
     }
-    .padding(11)
+    .padding(9)
   }
 
   private var mediumLayout: some View {
@@ -148,7 +152,7 @@ struct RoomWidgetView: View {
       // AC and Fan split the column evenly, so Fan is exactly as tall as Leave.
       VStack(spacing: 8) {
         acTile(compact: true)
-        fanTile
+        fanTile(compact: true)
       }
 
       // Lights keeps the tall tile; Tube is a thin bar beneath it.
@@ -160,27 +164,12 @@ struct RoomWidgetView: View {
     .padding(13)
   }
 
-  private var header: some View {
-    HStack(alignment: .firstTextBaseline) {
-      Text("Room")
-        .font(.system(size: 12, weight: .bold))
-
-      Spacer(minLength: 4)
-
-      if let updatedAt = entry.room.updatedAt {
-        Text(updatedAt, style: .time)
-          .font(.system(size: 9.5, weight: .medium))
-          .foregroundStyle(Color.white.opacity(0.52))
-      }
-    }
-  }
-
   // MARK: - Device tiles
 
   private func acTile(compact: Bool) -> some View {
     deviceTile(
       name: "AC",
-      symbol: "snowflake",
+      icon: .symbol("snowflake"),
       accent: .cyan,
       reading: entry.room.acReading,
       compact: compact,
@@ -189,17 +178,28 @@ struct RoomWidgetView: View {
     )
   }
 
-  private var fanTile: some View {
+  private func fanTile(compact: Bool) -> some View {
     deviceTile(
       name: "Fan",
-      symbol: "fan.fill",
+      icon: .symbol("fan.fill"),
       accent: .cyan,
       reading: entry.room.fanReading,
-      compact: true,
+      compact: compact,
       onIntent: FanOnIntent(),
       offIntent: FanOffIntent()
     )
-    .accessibilityLabel("Fan, \(entry.room.fanReading.isOn ? "on" : "off")")
+  }
+
+  /// The small widget's tube switch. The medium widget draws the tube as a bar.
+  private var tubeTile: some View {
+    deviceTile(
+      name: "Tube",
+      icon: .tube,
+      accent: .amber,
+      reading: entry.room.tubeReading,
+      onIntent: TubeOnIntent(),
+      offIntent: TubeOffIntent()
+    )
   }
 
   /// A low, full-width bar. It is the tube light, drawn as the same simple
@@ -248,7 +248,7 @@ struct RoomWidgetView: View {
   private var lightsTile: some View {
     deviceTile(
       name: "Lights",
-      symbol: "lightbulb.fill",
+      icon: .symbol("lightbulb.fill"),
       accent: .amber,
       reading: entry.room.lightsReading,
       onIntent: LightsOnIntent(),
@@ -262,7 +262,7 @@ struct RoomWidgetView: View {
   @ViewBuilder
   private func deviceTile<On: AppIntent, Off: AppIntent>(
     name: String,
-    symbol: String,
+    icon: TileIcon,
     accent: TileAccent,
     reading: DeviceReading,
     compact: Bool = false,
@@ -271,27 +271,31 @@ struct RoomWidgetView: View {
   ) -> some View {
     if reading.isOn {
       Button(intent: offIntent) {
-        tileBody(name: name, symbol: symbol, accent: accent, reading: reading, compact: compact)
+        tileBody(name: name, icon: icon, accent: accent, reading: reading, compact: compact)
       }
       .buttonStyle(.plain)
+      .accessibilityLabel(name)
+      .accessibilityValue(reading.text)
     } else {
       Button(intent: onIntent) {
-        tileBody(name: name, symbol: symbol, accent: accent, reading: reading, compact: compact)
+        tileBody(name: name, icon: icon, accent: accent, reading: reading, compact: compact)
       }
       .buttonStyle(.plain)
+      .accessibilityLabel(name)
+      .accessibilityValue(reading == .unknown ? "unknown" : reading.text)
     }
   }
 
   private func tileBody(
     name: String,
-    symbol: String,
+    icon: TileIcon,
     accent: TileAccent,
     reading: DeviceReading,
     compact: Bool = false
   ) -> some View {
     let style: TileAccent = reading.isOn ? accent : .neutral
     // A half-height tile has room for a single line of value, not the big one.
-    let valueSize: CGFloat = compact ? 18 : (isSmall ? 20 : 24)
+    let valueSize: CGFloat = compact ? 18 : (isSmall ? 22 : 24)
 
     return VStack(alignment: .leading, spacing: 0) {
       HStack(spacing: 4) {
@@ -304,9 +308,16 @@ struct RoomWidgetView: View {
 
         Spacer(minLength: 2)
 
-        Image(systemName: symbol)
-          .font(.system(size: 13, weight: .semibold))
-          .foregroundStyle(reading.isOn ? style.label : Color.white.opacity(0.34))
+        Group {
+          switch icon {
+          case let .symbol(systemName):
+            Image(systemName: systemName).font(.system(size: isSmall ? 12 : 13, weight: .semibold))
+          case .tube:
+            // The same upright bar the app and the medium widget use.
+            Capsule().frame(width: 4.5, height: 14)
+          }
+        }
+        .foregroundStyle(reading.isOn ? style.label : Color.white.opacity(0.34))
       }
 
       Spacer(minLength: 4)
@@ -321,7 +332,8 @@ struct RoomWidgetView: View {
         // command reads as "working" rather than "ignored".
         .invalidatableContent()
     }
-    .padding(.horizontal, isSmall ? 10 : 13)
+    // Narrow enough that "Lights" keeps full size beside its icon.
+    .padding(.horizontal, isSmall ? 9 : 13)
     .padding(.vertical, compact ? 8 : (isSmall ? 9 : 12))
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     .background(tileShape(tileRadius).fill(style.fill))
@@ -379,7 +391,7 @@ struct RoomActionsWidget: Widget {
       RoomWidgetView(entry: entry)
     }
     .configurationDisplayName("Room")
-    .description("Live AC, fan and light state, with arrive and leave scenes.")
+    .description("AC, lights, fan and tube. The medium size adds Enter and Leave Room.")
     .supportedFamilies([.systemSmall, .systemMedium])
     // WidgetKit adds its own content margins on top of whatever the view sets.
     // Those cost roughly 16pt a side, which shrank the medium tiles enough to

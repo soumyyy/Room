@@ -25,8 +25,10 @@ code leaves the shown state wrong until the next command.
 - [x] 7 · Widget: draw a snapshot written in the last 60 s as-is; otherwise refresh capped at 4 s;
       `.invalidatableContent()` dims values from tap until reload
 - [x] 8 · N/A: the widget has no temperature buttons; spacing (item 2) covers repeated AC on/off
-- [ ] 9 · Bulbs: rediscover by MAC on failure, cache MAC→IP in the App Group (no rebuild)
-- [ ] 10 · Control Center / Lock Screen controls (iOS 18 ControlWidget)
+- [-] 9 · Bulbs: rediscover by MAC — DROPPED (user, 2026-11-12)
+- [-] 10 · Control Center / Lock Screen controls — DROPPED (user, 2026-11-12)
+- [x] 12 · Redesign the small widget — option A, four equal switches (AC, Lights, Fan, Tube);
+      Enter/Leave stay on the medium widget and Siri
 - [ ] 11 · Siri: verify "Set Room to 24 degrees" and other phrases by voice on device; clear dialogs
 
 ## Alexa — later, no code
