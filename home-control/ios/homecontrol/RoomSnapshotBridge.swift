@@ -184,6 +184,6 @@ final class RoomSnapshotBridge: NSObject {
   @objc func clearActionLog() { RoomActionLog.clear() }
 
   private func reload() {
-    WidgetCenter.shared.reloadTimelines(ofKind: RoomConfig.widgetKind)
+    RoomIntentSupport.reloadWidget()
   }
 }

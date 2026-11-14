@@ -26,7 +26,9 @@ code leaves the shown state wrong until the next command.
       `.invalidatableContent()` dims values from tap until reload
 - [x] 8 · N/A: the widget has no temperature buttons; spacing (item 2) covers repeated AC on/off
 - [-] 9 · Bulbs: rediscover by MAC — DROPPED (user, 2026-11-12)
-- [-] 10 · Control Center / Lock Screen controls — DROPPED (user, 2026-11-12)
+- [x] 10 · Control Center controls (2026-11-15, revived): Room (in/away), AC, Lights, Fan, Tube
+      switches in `RoomWidgetExtension/RoomControls.swift`; read the shared snapshot, reload with the
+      widget. Not yet tried on device
 - [x] 12 · Redesign the small widget — option A, four equal switches (AC, Lights, Fan, Tube);
       Enter/Leave stay on the medium widget and Siri
 - [ ] 11 · Siri: verify "Set Room to 24 degrees" and other phrases by voice on device; clear dialogs

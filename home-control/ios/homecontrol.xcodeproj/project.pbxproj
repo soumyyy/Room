@@ -32,6 +32,7 @@
 		AED45C8F46C552F2EA0ACC81 /* RoomWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2659AA91764E3956F827427A /* RoomWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		EAE04F6A16D68EADE5457F7B /* RoomWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A2F4F876812695AC375558 /* RoomWidget.swift */; };
+		C0A7120000000000000000C2 /* RoomControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A7120000000000000000C1 /* RoomControls.swift */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
@@ -73,6 +74,7 @@
 		67AADE6B4EA3C2E67B6863C5 /* RoomIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomIntents.swift; sourceTree = "<group>"; };
 		6D59B303C2B456354B37EDEC /* Pods-homecontrol.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-homecontrol.release.xcconfig"; path = "Target Support Files/Pods-homecontrol/Pods-homecontrol.release.xcconfig"; sourceTree = "<group>"; };
 		81A2F4F876812695AC375558 /* RoomWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomWidget.swift; sourceTree = "<group>"; };
+		C0A7120000000000000000C1 /* RoomControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomControls.swift; sourceTree = "<group>"; };
 		86A0A1449F6FBB5850377500 /* RoomConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomConfig.swift; sourceTree = "<group>"; };
 		A1C0DE0000000000000000B1 /* RoomShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomShortcuts.swift; sourceTree = "<group>"; };
 		A1C0DE0000000000000000C1 /* RoomSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomSnapshot.swift; sourceTree = "<group>"; };
@@ -179,6 +181,7 @@
 			isa = PBXGroup;
 			children = (
 				81A2F4F876812695AC375558 /* RoomWidget.swift */,
+				C0A7120000000000000000C1 /* RoomControls.swift */,
 			);
 			path = RoomWidgetExtension;
 			sourceTree = "<group>";
@@ -460,6 +463,7 @@
 				88B02693A1F55E6E31A1C86F /* RoomIntents.swift in Sources */,
 				A1C0DE0000000000000000C3 /* RoomSnapshot.swift in Sources */,
 				EAE04F6A16D68EADE5457F7B /* RoomWidget.swift in Sources */,
+				C0A7120000000000000000C2 /* RoomControls.swift in Sources */,
 				944460F0553BCAD8377BEED6 /* TuyaClient.swift in Sources */,
 				1F2F2DADD2F8776591B0446B /* WiZClient.swift in Sources */,
 			);

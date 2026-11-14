@@ -139,6 +139,8 @@ extension WizPilot {
 
 enum RoomConfig {
   static let widgetKind = "com.soumymaheshwri.room.actions"
+  /// Control Center switches are "<prefix>ac", "<prefix>lights", …
+  static let controlKindPrefix = "com.soumymaheshwri.room.control."
   /// Must match the App Group on both bundle IDs in the developer portal.
   static let appGroupID = "group.org.name.homecontrol"
   static let wizPort: UInt16 = 38899

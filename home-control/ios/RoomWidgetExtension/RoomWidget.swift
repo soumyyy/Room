@@ -30,6 +30,9 @@ struct RoomWidgetProvider: TimelineProvider {
         // the physical remote or a wall switch shows up. Capped, so a slow
         // network leaves the last known state on screen instead of nothing.
         room = await Self.refresh(within: RoomConfig.widgetRefreshBudget) ?? RoomSnapshotStore.load()
+        // A change made with the remote or a wall switch reaches the
+        // Control Center switches too.
+        if room != stored, #available(iOS 18.0, *) { ControlCenter.shared.reloadAllControls() }
       }
       let entry = RoomWidgetEntry(date: .now, room: room)
       completion(Timeline(entries: [entry], policy: .after(.now.addingTimeInterval(15 * 60))))
@@ -428,5 +431,12 @@ struct RoomActionsWidget: Widget {
 struct RoomWidgetsBundle: WidgetBundle {
   var body: some Widget {
     RoomActionsWidget()
+    if #available(iOS 18.0, *) {
+      RoomSceneControl()
+      ACControl()
+      LightsControl()
+      FanControl()
+      TubeControl()
+    }
   }
 }

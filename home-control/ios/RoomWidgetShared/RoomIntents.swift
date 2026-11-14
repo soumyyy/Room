@@ -610,5 +610,7 @@ enum RoomIntentSupport {
   /// alive, so nudge the timeline while we are here.
   static func reloadWidget() {
     WidgetCenter.shared.reloadTimelines(ofKind: RoomConfig.widgetKind)
+    // Control Center switches read the same snapshot; keep them in step.
+    if #available(iOS 18.0, *) { ControlCenter.shared.reloadAllControls() }
   }
 }
