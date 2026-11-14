@@ -357,10 +357,10 @@ struct RoomWidgetView: View {
       let size: CGFloat = isSmall ? 20 : 22
       Image(systemName: systemName)
         .font(.system(size: isSmall ? 10 : 11, weight: .semibold))
-        .foregroundStyle(lit ? Color.black : Palette.offLabel)
+        .foregroundStyle(lit ? glow.color : Palette.offLabel)
         .frame(width: size, height: size)
-        .background(Circle().fill(lit ? glow.color : Palette.disc))
-        .shadow(color: lit ? glow.color.opacity(0.5) : .clear, radius: 5)
+        .background(Circle().fill(lit ? glow.color.opacity(0.2) : Palette.disc))
+        .shadow(color: lit ? glow.color.opacity(0.35) : .clear, radius: 4)
     case let .symbol(systemName):
       Image(systemName: systemName)
         .font(.system(size: isSmall ? 13 : 15, weight: .semibold))
@@ -386,13 +386,13 @@ struct RoomWidgetView: View {
       tileShape.fill(
         RadialGradient(
           stops: [
-            .init(color: glow.color.opacity(glow == .warm ? 0.40 : 0.32), location: 0),
-            .init(color: glow.color.opacity(0.07), location: 0.6),
-            .init(color: .clear, location: 1),
+            .init(color: glow.color.opacity(glow == .warm ? 0.42 : 0.34), location: 0),
+            .init(color: glow.color.opacity(glow == .warm ? 0.22 : 0.17), location: 0.45),
+            .init(color: glow.color.opacity(0.07), location: 1),
           ],
           center: .topLeading,
           startRadius: 0,
-          endRadius: 140
+          endRadius: 230
         )
       )
     }
@@ -417,9 +417,12 @@ struct RoomWidgetView: View {
   }
 
   private func sceneBody(title: String, open: Bool) -> some View {
-    VStack(alignment: .leading, spacing: 0) {
-      DoorGlyph(open: open)
-        .frame(width: 22, height: 30)
+    let warm = TileGlow.warm.color
+    return VStack(alignment: .leading, spacing: 0) {
+      Image(systemName: open ? "door.left.hand.open" : "door.left.hand.closed")
+        .font(.system(size: 26, weight: .medium))
+        .foregroundStyle(open ? warm : Palette.offLabel)
+        .shadow(color: open ? warm.opacity(0.6) : .clear, radius: 5)
       Spacer(minLength: 4)
       Text(title)
         .font(.system(size: 16, weight: .semibold))
@@ -429,7 +432,7 @@ struct RoomWidgetView: View {
     }
     .padding(11)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-    .background(tileShape.fill(Palette.tile))
+    .background { tileBackground(glow: .warm, lit: open) }
   }
 
   /// The Lock Screen circle: the same door and the same choice as the medium
@@ -437,14 +440,21 @@ struct RoomWidgetView: View {
   @ViewBuilder
   private var lockScreenDoor: some View {
     if occupied {
-      Button(intent: LeaveRoomIntent()) { LockScreenDoorGlyph(open: true) }
+      Button(intent: LeaveRoomIntent()) { lockScreenSymbol(open: true) }
         .buttonStyle(.plain)
         .accessibilityLabel("Leave Room")
     } else {
-      Button(intent: EnterRoomIntent()) { LockScreenDoorGlyph(open: false) }
+      Button(intent: EnterRoomIntent()) { lockScreenSymbol(open: false) }
         .buttonStyle(.plain)
         .accessibilityLabel("Enter Room")
     }
+  }
+
+  private func lockScreenSymbol(open: Bool) -> some View {
+    Image(systemName: open ? "door.left.hand.open" : "door.left.hand.closed")
+      .font(.system(size: 30, weight: .semibold))
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .widgetAccentable()
   }
 
   /// Replaces a tile's icon when its last command was not confirmed.
@@ -455,96 +465,6 @@ struct RoomWidgetView: View {
 
   private var tileShape: RoundedRectangle {
     RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
-  }
-}
-
-/// The app icon's door, small. Open: a warm doorway with the dark door swung
-/// in front of it. Shut: a dark door with a line of warm light beneath.
-private struct DoorGlyph: View {
-  let open: Bool
-
-  var body: some View {
-    GeometryReader { geo in
-      let w = geo.size.width
-      let h = geo.size.height
-      let warm = TileGlow.warm.color
-      if open {
-        ZStack(alignment: .topLeading) {
-          RoundedRectangle(cornerRadius: w * 0.08)
-            .fill(LinearGradient(
-              colors: [Color(red: 1.0, green: 0.945, blue: 0.863), warm],
-              startPoint: .top,
-              endPoint: .bottom
-            ))
-            .shadow(color: warm.opacity(0.5), radius: 4)
-          Path { p in
-            p.move(to: .zero)
-            p.addLine(to: CGPoint(x: w * 0.5, y: h * 0.07))
-            p.addLine(to: CGPoint(x: w * 0.5, y: h))
-            p.addLine(to: CGPoint(x: 0, y: h * 0.93))
-            p.closeSubpath()
-          }
-          .fill(Color(red: 0.102, green: 0.102, blue: 0.11))
-        }
-      } else {
-        ZStack(alignment: .bottom) {
-          RoundedRectangle(cornerRadius: w * 0.1)
-            .fill(Color(red: 0.173, green: 0.173, blue: 0.18))
-            .overlay(
-              RoundedRectangle(cornerRadius: w * 0.1)
-                .stroke(Palette.offGlyph, lineWidth: 1)
-            )
-          Capsule()
-            .fill(warm.opacity(0.75))
-            .frame(height: 1.5)
-            .padding(.horizontal, 1)
-            .offset(y: 2)
-        }
-      }
-    }
-  }
-}
-
-/// The door in one colour, for the Lock Screen. Open: a faint doorway with the
-/// door swung solid in front of it. Shut: an outlined door with a handle and a
-/// line of light beneath.
-private struct LockScreenDoorGlyph: View {
-  let open: Bool
-
-  var body: some View {
-    GeometryReader { geo in
-      let w = geo.size.width
-      let h = geo.size.height
-      if open {
-        ZStack(alignment: .topLeading) {
-          RoundedRectangle(cornerRadius: w * 0.08).fill(Color.white.opacity(0.45))
-          Path { p in
-            p.move(to: .zero)
-            p.addLine(to: CGPoint(x: w * 0.5, y: h * 0.11))
-            p.addLine(to: CGPoint(x: w * 0.5, y: h))
-            p.addLine(to: CGPoint(x: 0, y: h * 0.89))
-            p.closeSubpath()
-          }
-          .fill(Color.white)
-        }
-      } else {
-        // Line weights scale with the door, so it reads the same at any size.
-        ZStack(alignment: .bottom) {
-          RoundedRectangle(cornerRadius: w * 0.1)
-            .stroke(Color.white, lineWidth: h * 0.07)
-            .padding(.bottom, h * 0.16)
-          Circle()
-            .fill(Color.white)
-            .frame(width: h * 0.11, height: h * 0.11)
-            .position(x: w * 0.72, y: h * 0.48)
-          Capsule().fill(Color.white).frame(height: h * 0.07)
-        }
-      }
-    }
-    // Most of the circle's height, leaving the system's ring of margin.
-    .frame(width: 26, height: 40)
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .widgetAccentable()
   }
 }
 
