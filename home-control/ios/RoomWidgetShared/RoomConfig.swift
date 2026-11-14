@@ -144,7 +144,6 @@ enum RoomConfig {
   /// Must match the App Group on both bundle IDs in the developer portal.
   static let appGroupID = "group.org.name.homecontrol"
   static let wizPort: UInt16 = 38899
-  static let wizRetryDelayNanoseconds: UInt64 = 75_000_000
   /// Upper bound on a single UDP send, so an unreachable LAN can never
   /// stall a widget intent past its execution budget.
   static let wizSendTimeout: TimeInterval = 2.0
@@ -215,12 +214,10 @@ enum RoomConfig {
   }
 
   static let enterScene = AcScene(power: 1, mode: 0, temp: 27, wind: 1)
-  static let leaveScene = AcScene(power: 0, mode: 0, temp: 27, wind: 1)
   static let acOnScene = AcScene(power: 1, mode: 0, temp: 27, wind: 1)
   static let acOffScene = AcScene(power: 0, mode: 0, temp: 27, wind: 1)
 
   static let enterLights = WizPilot(state: true, dimming: 100, temp: 4200)
-  static let leaveLights = WizPilot(state: false)
   static let lightsOn = WizPilot(state: true, dimming: 100, temp: 4200)
   static let lightsOff = WizPilot(state: false)
 

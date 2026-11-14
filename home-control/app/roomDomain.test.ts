@@ -28,7 +28,6 @@ import {
   mixHex,
   nextMode,
   nextWind,
-  parseAwayState,
   presetForTemp,
   revertNodeChange,
   isTuyaConfigured,
@@ -355,48 +354,6 @@ test('revert: a change of both switches restores both', () => {
   const after = revertNodeChange(shown, { tube: false, fan: false }, before);
   assert.equal(after.tube, true);
   assert.equal(after.fan, true);
-});
-
-// ── What Enter room restores must survive a restart ─────────────────────────
-
-test('away: a saved state round-trips through JSON', () => {
-  const saved = {
-    ac: { power: 1 as const, mode: 0 as const, temp: 24, wind: 1 as const },
-    activeGroupIds: ['left'],
-    node: { tube: true, fan: false },
-  };
-  assert.deepEqual(parseAwayState(JSON.stringify(saved)), saved);
-});
-
-test('away: nothing stored, or garbage, means the user is not away', () => {
-  assert.equal(parseAwayState(null), null);
-  assert.equal(parseAwayState(''), null);
-  assert.equal(parseAwayState('not json'), null);
-  assert.equal(parseAwayState('42'), null);
-  assert.equal(parseAwayState('null'), null);
-});
-
-test('away: a stale file cannot widen the accepted ranges or invent groups', () => {
-  const stored = JSON.stringify({
-    ac: { power: 1, mode: 99, temp: 200, wind: 7 },
-    activeGroupIds: ['left', 'attic', 42],
-    node: { tube: 'yes', fan: true },
-  });
-  const away = parseAwayState(stored);
-  assert.ok(away);
-  assert.equal(away.ac.temp, 30);
-  assert.equal(away.ac.mode, 0);
-  assert.equal(away.ac.wind, 1);
-  assert.deepEqual(away.activeGroupIds, ['left']);
-  assert.deepEqual(away.node, { tube: false, fan: true });
-});
-
-test('away: a state missing pieces restores nothing rather than guessing', () => {
-  const away = parseAwayState('{}');
-  assert.ok(away);
-  assert.equal(away.ac.power, 0);
-  assert.deepEqual(away.activeGroupIds, []);
-  assert.deepEqual(away.node, { tube: false, fan: false });
 });
 
 // ── Manrope: one file per weight, chosen from the weight a style asks for ────

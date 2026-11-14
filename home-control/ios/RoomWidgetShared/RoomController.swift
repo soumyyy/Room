@@ -106,14 +106,6 @@ actor RoomController {
     }
   }
 
-  @discardableResult
-  func acStatus() async throws -> AcScene {
-    let began = Date()
-    let scene = try await TuyaClient.shared.fetchACScene()
-    RoomSnapshotStore.update(keys: ["ac"], observedAt: began) { $0.ac = scene }
-    return scene
-  }
-
   private func setACScene(_ scene: AcScene) async throws {
     _ = try await queueAC { _ in scene }
   }

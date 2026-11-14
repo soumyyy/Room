@@ -64,12 +64,8 @@ check(
 );
 
 check(
-  'the bridge exports the away-state methods the screen calls',
-  /readAway:/.test(bridgeExports) && /saveAway:/.test(bridgeExports),
-);
-check(
-  'the bridge exports recordNode, which the widget reads',
-  /recordNode:/.test(bridgeExports),
+  'the bridge exports what the screen calls',
+  ['recordObservation:', 'performScene:', 'readScene:', 'logAction:'].every((name) => bridgeExports.includes(name)),
 );
 
 if (failures.length) {

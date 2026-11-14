@@ -499,52 +499,6 @@ type StoredSnapshot = {
   >;
 };
 
-/** What Leave room turned off, kept so Enter room can turn exactly that back on. */
-export type AwayState = {
-  ac: AcScene;
-  activeGroupIds: string[];
-  node: NodeChange;
-};
-
-/**
- * Reads a saved away state defensively: a stale or damaged file must neither
- * crash the screen nor turn on something the user never had on. Null means the
- * user is not away.
- */
-export function parseAwayState(json: string | null): AwayState | null {
-  if (!json) {
-    return null;
-  }
-
-  let raw: unknown;
-  try {
-    raw = JSON.parse(json);
-  } catch {
-    return null;
-  }
-
-  if (!raw || typeof raw !== 'object') {
-    return null;
-  }
-
-  const stored = raw as {
-    ac?: { power: number; mode: number; temp: number; wind: number } | null;
-    activeGroupIds?: unknown;
-    node?: { tube?: unknown; fan?: unknown } | null;
-  };
-
-  return {
-    ac: sceneFromSnapshot({ ac: stored.ac }) ?? { ...INITIAL_SCENE, power: 0 },
-    activeGroupIds: Array.isArray(stored.activeGroupIds)
-      ? stored.activeGroupIds.filter(
-          (id): id is string =>
-            typeof id === 'string' && BULB_GROUPS.some((group) => group.id === id),
-        )
-      : [],
-    node: { tube: stored.node?.tube === true, fan: stored.node?.fan === true },
-  };
-}
-
 /** Clamps a stored scene back into range; a stale file should never widen it. */
 export function sceneFromSnapshot(snapshot: StoredSnapshot | null): AcScene | null {
   const stored = snapshot?.ac;

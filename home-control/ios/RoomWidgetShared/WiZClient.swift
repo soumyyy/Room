@@ -205,23 +205,6 @@ actor WiZClient {
     }
   }
 
-  func readGroupStates() async -> [String: RoomSnapshot.LightState] {
-    let pilots = await readPilots()
-    var states: [String: RoomSnapshot.LightState] = [:]
-
-    for group in RoomConfig.lightGroupIDs {
-      let bulbs = RoomConfig.bulbs(inGroup: group)
-
-      let readings = bulbs.compactMap { pilots[$0.id] }.map { WizReading(isOn: $0.state, brightness: $0.dimming) }
-
-      if readings.count == bulbs.count, let state = RoomSnapshot.groupState(from: readings) {
-        states[group] = state
-      }
-    }
-
-    return states
-  }
-
   private func readPilot(from host: String, timeout: TimeInterval = RoomConfig.wizSendTimeout) async throws -> WizPilot {
     let payload = try JSONEncoder().encode(WizEnvelope(method: "getPilot", params: WizEmptyParams()))
     let data = try await request(payload, from: host, timeout: timeout)

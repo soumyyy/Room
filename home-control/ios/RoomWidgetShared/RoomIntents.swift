@@ -126,63 +126,6 @@ enum FanSpeedOption: Int, AppEnum {
   ]
 }
 
-/// Coarse steps so the value can be spoken. The Shortcuts app can still drive
-/// SetLightBrightnessIntent to any value between 10 and 100.
-@available(iOS 17.0, *)
-enum BrightnessStep: Int, AppEnum {
-  case tenPercent = 10
-  case quarter = 25
-  case half = 50
-  case threeQuarters = 75
-  case full = 100
-
-  static let typeDisplayRepresentation: TypeDisplayRepresentation = "Brightness"
-  static let caseDisplayRepresentations: [BrightnessStep: DisplayRepresentation] = [
-    .tenPercent: "10 percent",
-    .quarter: "25 percent",
-    .half: "50 percent",
-    .threeQuarters: "75 percent",
-    .full: "100 percent",
-  ]
-}
-
-/// Mirrors GROUP_COLOR_PRESETS in app/AppScreen.tsx.
-@available(iOS 17.0, *)
-enum LightColorOption: String, AppEnum {
-  case warmWhite = "warm-white"
-  case neutralWhite = "neutral-white"
-  case coolWhite = "cool-white"
-  case red = "red"
-  case orange = "orange"
-  case yellow = "yellow"
-  case green = "green"
-  case cyan = "cyan"
-  case blue = "blue"
-  case purple = "purple"
-  case pink = "pink"
-  case seafoam = "seafoam"
-  case lavender = "lavender"
-  case blush = "blush"
-
-  static let typeDisplayRepresentation: TypeDisplayRepresentation = "Colour"
-  static let caseDisplayRepresentations: [LightColorOption: DisplayRepresentation] = [
-    .warmWhite: "Warm White",
-    .neutralWhite: "Neutral",
-    .coolWhite: "Cool White",
-    .red: "Red",
-    .orange: "Orange",
-    .yellow: "Yellow",
-    .green: "Green",
-    .cyan: "Cyan",
-    .blue: "Blue",
-    .purple: "Purple",
-    .pink: "Pink",
-    .seafoam: "Seafoam",
-    .lavender: "Lavender",
-    .blush: "Blush",
-  ]
-}
-
 /// Everything "Set Room lights to …" can mean: a brightness or a colour. One
 /// enum, so both share a phrase instead of two shortcuts competing for it.
 @available(iOS 17.0, *)
@@ -518,50 +461,6 @@ struct LightsOffIntent: AppIntent {
 
   func perform() async throws -> some IntentResult {
     try await logged(detail: group.rawValue) { try await RoomController.shared.lightsOff(group: group.configGroup) }
-    RoomIntentSupport.reloadWidget()
-    return .result()
-  }
-}
-
-@available(iOS 17.0, *)
-struct SetLightBrightnessIntent: AppIntent {
-  static let title: LocalizedStringResource = "Set Light Brightness"
-  static let openAppWhenRun = false
-  static let isDiscoverable = true
-  static var parameterSummary: some ParameterSummary {
-    Summary("Set the \(\.$group) lights to \(\.$level)")
-  }
-
-  @Parameter(title: "Lights", default: .all)
-  var group: LightGroup
-
-  @Parameter(title: "Brightness")
-  var level: BrightnessStep
-
-  func perform() async throws -> some IntentResult {
-    try await logged(detail: "\(group.rawValue) \(level.rawValue)%") { try await RoomController.shared.setBrightness(level.rawValue, group: group.configGroup) }
-    RoomIntentSupport.reloadWidget()
-    return .result()
-  }
-}
-
-@available(iOS 17.0, *)
-struct SetLightColorIntent: AppIntent {
-  static let title: LocalizedStringResource = "Set Light Colour"
-  static let openAppWhenRun = false
-  static let isDiscoverable = true
-  static var parameterSummary: some ParameterSummary {
-    Summary("Set the \(\.$group) lights to \(\.$color)")
-  }
-
-  @Parameter(title: "Lights", default: .all)
-  var group: LightGroup
-
-  @Parameter(title: "Colour")
-  var color: LightColorOption
-
-  func perform() async throws -> some IntentResult {
-    try await logged(detail: "\(group.rawValue) \(color.rawValue)") { try await RoomController.shared.setPreset(color.rawValue, group: group.configGroup) }
     RoomIntentSupport.reloadWidget()
     return .result()
   }
