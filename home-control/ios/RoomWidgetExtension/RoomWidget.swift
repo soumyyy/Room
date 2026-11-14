@@ -528,19 +528,21 @@ private struct LockScreenDoorGlyph: View {
           .fill(Color.white)
         }
       } else {
+        // Line weights scale with the door, so it reads the same at any size.
         ZStack(alignment: .bottom) {
           RoundedRectangle(cornerRadius: w * 0.1)
-            .stroke(Color.white, lineWidth: 1.6)
-            .padding(.bottom, 3.5)
+            .stroke(Color.white, lineWidth: h * 0.07)
+            .padding(.bottom, h * 0.16)
           Circle()
             .fill(Color.white)
-            .frame(width: 2.4, height: 2.4)
-            .position(x: w * 0.75, y: h * 0.5)
-          Capsule().fill(Color.white).frame(height: 1.6)
+            .frame(width: h * 0.11, height: h * 0.11)
+            .position(x: w * 0.72, y: h * 0.48)
+          Capsule().fill(Color.white).frame(height: h * 0.07)
         }
       }
     }
-    .frame(width: 13, height: 20)
+    // Most of the circle's height, leaving the system's ring of margin.
+    .frame(width: 26, height: 40)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .widgetAccentable()
   }
