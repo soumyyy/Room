@@ -30,6 +30,16 @@ code leaves the shown state wrong until the next command.
 - [x] 12 · Redesign the small widget — option A, four equal switches (AC, Lights, Fan, Tube);
       Enter/Leave stay on the medium widget and Siri
 - [ ] 11 · Siri: verify "Set Room to 24 degrees" and other phrases by voice on device; clear dialogs
+- [x] 13 · Widget lights (2026-11-15, 7737656): log showed every widget failure was a WiZ bulb not
+      confirming or "Host is down". Burst sends, short readback retries, 4.5 s budget; unconfirmed bulbs
+      drawn as requested; per-device ⚠ on tiles (`RoomSnapshot.failedAt`)
+- [x] 14 · Siri (7737656): fan/tube/AC on-off shortcuts, temperature synonyms + number prompt, one
+      "Set Room lights to …" for brightness and colour; spoken replies. Intents now iOS 17
+- [x] 15 · Leave Room while already away turns things off again and keeps the restore plan (7737656)
+- [x] 16 · Colour presets tuned by eye on the bulbs (98bd553); icon (b7107e0); symbols (484b5c1)
+- [ ] 17 · On device: widget light taps after the phone sleeps; check the Diagnostics log for
+      "did not confirm" entries dropping off
+- [ ] 18 · Bulb .116 (right-1) has the weakest signal (-70 dBm): DHCP reservation / coverage
 
 ## Alexa — later, no code
 
