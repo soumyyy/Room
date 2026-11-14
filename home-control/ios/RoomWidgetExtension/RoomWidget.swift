@@ -136,7 +136,7 @@ struct RoomWidgetView: View {
       VStack(spacing: 8) {
         sceneButton(
           "Enter",
-          symbol: "door.left.hand.open",
+          symbol: "figure.walk.arrival",
           leadingAligned: true,
           intent: EnterRoomIntent()
         )
@@ -169,7 +169,7 @@ struct RoomWidgetView: View {
   private func acTile(compact: Bool) -> some View {
     deviceTile(
       name: "AC",
-      icon: .symbol("snowflake"),
+      icon: .symbol("air.conditioner.horizontal.fill"),
       accent: .cyan,
       reading: entry.room.acReading,
       failed: entry.room.acFailed,
@@ -182,7 +182,7 @@ struct RoomWidgetView: View {
   private func fanTile(compact: Bool) -> some View {
     deviceTile(
       name: "Fan",
-      icon: .symbol("fan.fill"),
+      icon: .symbol("fan.ceiling.fill"),
       accent: .cyan,
       reading: entry.room.fanReading,
       failed: entry.room.fanFailed,
@@ -257,7 +257,7 @@ struct RoomWidgetView: View {
   private var lightsTile: some View {
     deviceTile(
       name: "Lights",
-      icon: .symbol("lightbulb.fill"),
+      icon: .symbol("lightbulb.2.fill"),
       accent: .amber,
       reading: entry.room.lightsReading,
       failed: entry.room.lightsFailed,

@@ -21,7 +21,7 @@ struct RoomShortcutsProvider: AppShortcutsProvider {
         "Restore \(.applicationName)"
       ],
       shortTitle: "Enter Room",
-      systemImageName: "door.left.hand.open"
+      systemImageName: "figure.walk.arrival"
     )
 
     AppShortcut(
@@ -66,7 +66,7 @@ struct RoomShortcutsProvider: AppShortcutsProvider {
         "\(.applicationName) AC \(\.$power)"
       ],
       shortTitle: "AC On/Off",
-      systemImageName: "snowflake"
+      systemImageName: "air.conditioner.horizontal.fill"
     )
 
     AppShortcut(
@@ -91,7 +91,7 @@ struct RoomShortcutsProvider: AppShortcutsProvider {
         "\(.applicationName) fan \(\.$power)"
       ],
       shortTitle: "Fan On/Off",
-      systemImageName: "fan.fill"
+      systemImageName: "fan.ceiling.fill"
     )
 
     AppShortcut(
@@ -109,7 +109,7 @@ struct RoomShortcutsProvider: AppShortcutsProvider {
         "\(.applicationName) tubelight \(\.$power)"
       ],
       shortTitle: "Tube Light On/Off",
-      systemImageName: "light.cylindrical.ceiling.fill"
+      systemImageName: "light.panel.fill"
     )
 
     AppShortcut(
@@ -122,7 +122,7 @@ struct RoomShortcutsProvider: AppShortcutsProvider {
         "Turn on \(.applicationName) \(\.$group) lights"
       ],
       shortTitle: "Lights On",
-      systemImageName: "lightbulb.fill"
+      systemImageName: "lightbulb.2.fill"
     )
 
     AppShortcut(
@@ -135,7 +135,7 @@ struct RoomShortcutsProvider: AppShortcutsProvider {
         "Turn off \(.applicationName) \(\.$group) lights"
       ],
       shortTitle: "Lights Off",
-      systemImageName: "lightbulb"
+      systemImageName: "lightbulb.2"
     )
 
     AppShortcut(
@@ -148,7 +148,7 @@ struct RoomShortcutsProvider: AppShortcutsProvider {
         "\(.applicationName) lights \(\.$setting)"
       ],
       shortTitle: "Light Colour or Brightness",
-      systemImageName: "paintpalette"
+      systemImageName: "lightbulb.max.fill"
     )
   }
 }
