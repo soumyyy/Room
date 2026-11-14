@@ -75,6 +75,15 @@ actor WiZClient {
     check(count == 1, "Retry must not repeat successful device actions")
     check(RoomSnapshotStore.scene()?.restore.ac?.power == 1, "Retry must not save the already-off room")
 
+    // Back in the room without Enter: something gets switched on again. Leave
+    // must still turn it off, and keep the original plan for Enter.
+    try await RoomController.shared.setFan(true)
+    let again = try await RoomController.shared.performScene("leave")
+    check(again.phase == "away" && again.snapshot.node?.fan == false, "Leave while away still turns things off")
+    check(RoomSnapshotStore.scene()?.restore.ac?.temp == 23 && RoomSnapshotStore.scene()?.restore.node?.fan == true,
+          "Leave while away keeps the original restore plan")
+    check(RoomConfig.describe(["ac", "bulb:" + failedID]) == "AC and " + RoomConfig.bulbs[0].name, "Failed devices are named")
+
     await WiZClient.shared.fail([failedID])
     let partialEnter = try await RoomController.shared.performScene("enter")
     check(partialEnter.phase == "entering", "Partial enter remains retryable")

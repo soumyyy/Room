@@ -108,6 +108,23 @@ struct LightPreset: Identifiable, Sendable {
 }
 
 extension WizPilot {
+  /// `previous` with every field this command sets replaced: what the bulb
+  /// should now be doing if the command landed.
+  func applied(to previous: WizPilot?) -> WizPilot {
+    guard var next = previous else { return self }
+    next.state = state
+    if let dimming { next.dimming = dimming }
+    // A white temperature and a colour are two modes; setting one ends the other.
+    if let temp {
+      next.temp = temp
+      (next.r, next.g, next.b, next.c, next.w) = (nil, nil, nil, nil, nil)
+    } else if [r, g, b, c, w].contains(where: { $0 != nil }) {
+      next.temp = nil
+      (next.r, next.g, next.b, next.c, next.w) = (r, g, b, c, w)
+    }
+    return next
+  }
+
   func matches(_ actual: WizPilot) -> Bool {
     guard state == actual.state else { return false }
     if !state { return true }
@@ -129,6 +146,19 @@ enum RoomConfig {
   /// Upper bound on a single UDP send, so an unreachable LAN can never
   /// stall a widget intent past its execution budget.
   static let wizSendTimeout: TimeInterval = 2.0
+  /// Total time one bulb gets to confirm a command. Bulbs are commanded in
+  /// parallel, so this is also roughly how long a light intent can take.
+  static let wizCommandBudget: TimeInterval = 4.5
+  /// Each round sends the command this many times: setPilot is idempotent, and
+  /// a phone just out of sleep often loses the first packet while it finds the
+  /// bulb on the network.
+  static let wizBurstCount = 3
+  static let wizBurstGap: TimeInterval = 0.1
+  /// How long one readback waits for the bulb. Several short waits catch a
+  /// slow bulb more often than two long ones.
+  static let wizConfirmTimeout: TimeInterval = 0.6
+  /// Pause before another round when no packet left the phone ("Host is down").
+  static let wizUnreachableRetryDelay: TimeInterval = 0.3
   /// URLSession defaults to 60s, which is longer than a widget refresh lives.
   static let tuyaRequestTimeout: TimeInterval = 6.0
   /// Minimum time between IR commands to the AC, across the app, widget and
@@ -209,6 +239,21 @@ enum RoomConfig {
     .init(id: "lavender", name: "Lavender", pilot: WizPilot(state: true, r: 10, g: 0, b: 55, c: 200)),
     .init(id: "blush", name: "Blush", pilot: WizPilot(state: true, r: 57, g: 0, b: 18, w: 198)),
   ]
+
+  /// Device keys as people say them: "AC, fan and Right Light 1".
+  static func describe(_ keys: [String]) -> String {
+    let names = keys.map { key -> String in
+      switch key {
+      case "ac": return "AC"
+      case "fan": return "fan"
+      case "tube": return "tube light"
+      default: return bulbs.first { "bulb:" + $0.id == key }?.name ?? key
+      }
+    }
+    guard let last = names.last else { return "Nothing" }
+    let sentence = names.count == 1 ? last : names.dropLast().joined(separator: ", ") + " and " + last
+    return sentence.prefix(1).uppercased() + sentence.dropFirst()
+  }
 
   static func preset(id: String) -> LightPreset? {
     lightPresets.first { $0.id == id }

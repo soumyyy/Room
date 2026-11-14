@@ -5,12 +5,12 @@ actor RoomController {
 
   func enterRoom() async throws {
     let report = try await performScene("enter")
-    if !report.failed.isEmpty { throw RoomNetworkError.tuya(message: "Some devices were not restored. Run Enter Room again to retry.") }
+    if !report.failed.isEmpty { throw RoomNetworkError.tuya(message: "\(RoomConfig.describe(report.failed)) didn't come back on. Run Enter Room again to retry just that.") }
   }
 
   func leaveRoom() async throws {
     let report = try await performScene("leave")
-    if !report.failed.isEmpty { throw RoomNetworkError.tuya(message: "Some devices could not be confirmed off. Run Leave Room again to retry.") }
+    if !report.failed.isEmpty { throw RoomNetworkError.tuya(message: "\(RoomConfig.describe(report.failed)) didn't confirm off. Run Leave Room again to retry just that.") }
   }
 
   /// The same transaction is used by React Native, Siri and WidgetKit. The
@@ -20,12 +20,15 @@ actor RoomController {
     defer { RoomSnapshotStore.releaseSceneLock(lease) }
     var plan = RoomSnapshotStore.scene()
     if action == "leave" {
-      if plan?.phase == "away" { return RoomSnapshotStore.report() }
-      if plan?.phase != "leaving" {
+      if let saved = plan, saved.phase == "away" {
+        // Already away, but something may have been switched back on since
+        // (the app, the widget, a wall switch). Turn everything off again and
+        // keep the plan Enter Room restores: what the room was before leaving.
+        plan = RoomSceneState(restore: saved.restore, phase: "leaving", pending: Self.sceneKeys)
+      } else if plan?.phase != "leaving" {
         let current = await refresh()
         // A failed Enter retains the original restore plan on a new Leave.
-        plan = RoomSceneState(restore: plan?.restore ?? current, phase: "leaving",
-          pending: ["ac", "fan", "tube"] + RoomConfig.bulbs.map { "bulb:" + $0.id })
+        plan = RoomSceneState(restore: plan?.restore ?? current, phase: "leaving", pending: Self.sceneKeys)
       }
     } else if action == "enter" {
       if plan?.phase != "entering" {
@@ -82,6 +85,8 @@ actor RoomController {
     return RoomSnapshotStore.report()
   }
 
+  private static let sceneKeys = ["ac", "fan", "tube"] + RoomConfig.bulbs.map { "bulb:" + $0.id }
+
   private func sceneDevice(_ key: String, leaving: Bool, restore: RoomSnapshot) async throws {
     switch key {
     case "ac": try await setACScene(leaving ? (restore.ac ?? RoomConfig.acOffScene).with(power: 0) : (restore.ac ?? RoomConfig.enterScene))
@@ -114,7 +119,8 @@ actor RoomController {
   }
 
   private func transmitACScene(_ scene: AcScene) async throws {
-    try await TuyaClient.shared.sendACScene(scene)
+    do { try await TuyaClient.shared.sendACScene(scene) }
+    catch { RoomSnapshotStore.markFailed(keys: ["ac"]); throw error }
     RoomSnapshotStore.update(keys: ["ac"], command: true) { $0.ac = scene }
   }
   func acOn() async throws { _ = try await queueAC { $0.with(power: 1) } }
@@ -152,8 +158,9 @@ actor RoomController {
   func setTube(_ on: Bool) async throws { try await setNode(tube: on, fan: nil) }
   func setFan(_ on: Bool) async throws { try await setNode(tube: nil, fan: on) }
   private func setNode(tube: Bool?, fan: Bool?) async throws {
-    try await TuyaClient.shared.sendNodeCommands(RoomConfig.nodeCommands(tube: tube, fan: fan))
     let keys = (tube == nil ? [] : ["tube"]) + (fan == nil ? [] : ["fan"])
+    do { try await TuyaClient.shared.sendNodeCommands(RoomConfig.nodeCommands(tube: tube, fan: fan)) }
+    catch { RoomSnapshotStore.markFailed(keys: keys); throw error }
     RoomSnapshotStore.update(keys: keys, command: true) { $0.apply(NodeState(tube: tube, fan: fan)) }
   }
 

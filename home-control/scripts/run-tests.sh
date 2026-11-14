@@ -42,3 +42,12 @@ swiftc -D ROOM_TESTS -o "$out/controller-tests" \
   ios/RoomWidgetShared/RoomController.swift \
   scripts/tests/RoomControllerTests.swift
 "$out/controller-tests"
+
+# The real WiZ client against a fake bulb on 127.0.0.1 that drops packets.
+swiftc -D ROOM_TESTS -o "$out/wiz-tests" \
+  ios/RoomWidgetShared/RoomGenerated.swift \
+  ios/RoomWidgetShared/RoomConfig.swift \
+  ios/RoomWidgetShared/RoomSnapshot.swift \
+  ios/RoomWidgetShared/WiZClient.swift \
+  scripts/tests/WizClientTests.swift
+"$out/wiz-tests"

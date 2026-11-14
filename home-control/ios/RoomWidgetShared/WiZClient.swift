@@ -26,56 +26,105 @@ actor WiZClient {
 
   /// Every addressed bulb must confirm. Successful bulbs are recorded even
   /// when a sibling fails, allowing a scene to retry only its unfinished work.
+  ///
+  /// A bulb that took the command but never confirmed it is recorded as doing
+  /// what was asked, since that is by far the likelier outcome, and marked
+  /// failed so the widget can say it is unconfirmed. A bulb no packet reached
+  /// keeps its last known state.
   func apply(_ pilot: WizPilot, to bulbs: [BulbConfig]) async throws {
     guard !bulbs.isEmpty else { return }
+    let began = Date()
 
-    let failures = await withTaskGroup(of: Error?.self) { group -> [Error] in
+    let failures = await withTaskGroup(of: (BulbConfig, delivered: Bool, Error)?.self) { group -> [(BulbConfig, delivered: Bool, Error)] in
       for bulb in bulbs {
         group.addTask {
+          var delivered = false
           do {
-            try await self.sendPilot(pilot, to: bulb.ip)
+            try await self.sendPilot(pilot, to: bulb, delivered: &delivered)
             return nil
           } catch {
-            return error
+            return (bulb, delivered, error)
           }
         }
       }
 
-      var collected: [Error] = []
+      var collected: [(BulbConfig, delivered: Bool, Error)] = []
       for await failure in group {
-        if let failure {
-          collected.append(failure)
-        }
+        if let failure { collected.append(failure) }
       }
       return collected
     }
 
-    if let first = failures.first {
-      throw first
+    guard let first = failures.first else { return }
+    for (bulb, delivered, _) in failures where delivered {
+      // Stamped with the command's start, so any real reading taken during
+      // the attempt is newer and wins over this assumption.
+      RoomSnapshotStore.update(keys: ["bulb:" + bulb.id], observedAt: began, command: true) {
+        let assumed = pilot.applied(to: $0.bulbs?[bulb.id])
+        if $0.bulbs == nil { $0.bulbs = [:] }
+        $0.bulbs?[bulb.id] = assumed
+      }
     }
+    RoomSnapshotStore.markFailed(keys: failures.map { "bulb:" + $0.0.id })
+    throw first.2
   }
 
-  private func sendPilot(_ pilot: WizPilot, to host: String) async throws {
+  /// Rounds of: send the command a few times, then read the bulb back. Repeats
+  /// until the bulb confirms or the budget runs out. `delivered` turns true once
+  /// any send leaves the phone.
+  private func sendPilot(_ pilot: WizPilot, to bulb: BulbConfig, delivered: inout Bool) async throws {
+    let host = bulb.ip
     let payload = try JSONEncoder().encode(WizEnvelope(method: "setPilot", params: pilot))
-    for attempt in 0..<2 {
-      let began = Date()
-      try await send(payload, to: host)
-      try await Task.sleep(nanoseconds: 200_000_000)
-      if let actual = try? await readPilot(from: host) {
-        if let bulb = RoomConfig.bulbs.first(where: { $0.ip == host }) {
-          RoomSnapshotStore.update(keys: ["bulb:" + bulb.id], observedAt: began) {
-            if $0.bulbs == nil { $0.bulbs = [:] }
-            $0.bulbs?[bulb.id] = actual
-          }
+    let deadline = Date().addingTimeInterval(RoomConfig.wizCommandBudget)
+    var lastError: Error?
+
+    func remaining() -> TimeInterval { deadline.timeIntervalSinceNow }
+
+    while remaining() > 0.05 {
+      let roundBegan = Date()
+      var sentThisRound = false
+
+      for index in 0..<RoomConfig.wizBurstCount {
+        if index > 0 { try await Self.sleep(min(RoomConfig.wizBurstGap, remaining())) }
+        guard remaining() > 0.05 else { break }
+        do {
+          try await send(payload, to: host, timeout: min(RoomConfig.wizSendTimeout, remaining()))
+          sentThisRound = true
+          delivered = true
+        } catch {
+          // "Host is down" right after the phone wakes is usually brief.
+          lastError = error
+        }
+      }
+
+      guard sentThisRound else {
+        try await Self.sleep(min(RoomConfig.wizUnreachableRetryDelay, max(0, remaining())))
+        continue
+      }
+
+      try await Self.sleep(min(0.15, max(0, remaining())))
+      guard remaining() > 0.05 else { break }
+      if let actual = try? await readPilot(from: host, timeout: min(RoomConfig.wizConfirmTimeout, remaining())) {
+        RoomSnapshotStore.update(keys: ["bulb:" + bulb.id], observedAt: roundBegan) {
+          if $0.bulbs == nil { $0.bulbs = [:] }
+          $0.bulbs?[bulb.id] = actual
         }
         if pilot.matches(actual) { return }
       }
-      if attempt == 0 { try await Task.sleep(nanoseconds: 250_000_000) }
     }
-    throw RoomNetworkError.wiz(message: "\(host) did not confirm the light command.")
+
+    if delivered || lastError == nil {
+      throw RoomNetworkError.wiz(message: "\(host) did not confirm the light command.")
+    }
+    throw lastError!
   }
 
-  private func send(_ payload: Data, to host: String) async throws {
+  private static func sleep(_ seconds: TimeInterval) async throws {
+    guard seconds > 0 else { return }
+    try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+  }
+
+  private func send(_ payload: Data, to host: String, timeout: TimeInterval = RoomConfig.wizSendTimeout) async throws {
     guard let port = NWEndpoint.Port(rawValue: RoomConfig.wizPort) else {
       throw RoomNetworkError.invalidURL
     }
@@ -99,7 +148,7 @@ actor WiZClient {
         let deadline = DispatchWorkItem {
           finish(.failure(RoomNetworkError.wiz(message: "\(host) did not respond in time.")))
         }
-        queue.asyncAfter(deadline: .now() + RoomConfig.wizSendTimeout, execute: deadline)
+        queue.asyncAfter(deadline: .now() + timeout, execute: deadline)
 
         connection.stateUpdateHandler = { state in
           switch state {
@@ -173,9 +222,9 @@ actor WiZClient {
     return states
   }
 
-  private func readPilot(from host: String) async throws -> WizPilot {
+  private func readPilot(from host: String, timeout: TimeInterval = RoomConfig.wizSendTimeout) async throws -> WizPilot {
     let payload = try JSONEncoder().encode(WizEnvelope(method: "getPilot", params: WizEmptyParams()))
-    let data = try await request(payload, from: host)
+    let data = try await request(payload, from: host, timeout: timeout)
     let response = try JSONDecoder().decode(WizGetPilotResponse.self, from: data)
 
     guard let result = response.result, let state = result.state else {
@@ -190,7 +239,7 @@ actor WiZClient {
   }
 
   /// Same shape as `send`, but waits for the bulb's reply.
-  private func request(_ payload: Data, from host: String) async throws -> Data {
+  private func request(_ payload: Data, from host: String, timeout: TimeInterval = RoomConfig.wizSendTimeout) async throws -> Data {
     guard let port = NWEndpoint.Port(rawValue: RoomConfig.wizPort) else {
       throw RoomNetworkError.invalidURL
     }
@@ -211,7 +260,7 @@ actor WiZClient {
         let deadline = DispatchWorkItem {
           finish(.failure(RoomNetworkError.wiz(message: "\(host) did not answer in time.")))
         }
-        queue.asyncAfter(deadline: .now() + RoomConfig.wizSendTimeout, execute: deadline)
+        queue.asyncAfter(deadline: .now() + timeout, execute: deadline)
 
         connection.stateUpdateHandler = { state in
           switch state {

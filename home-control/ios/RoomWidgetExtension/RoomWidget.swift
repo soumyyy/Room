@@ -172,6 +172,7 @@ struct RoomWidgetView: View {
       icon: .symbol("snowflake"),
       accent: .cyan,
       reading: entry.room.acReading,
+      failed: entry.room.acFailed,
       compact: compact,
       onIntent: ACOnIntent(),
       offIntent: ACOffIntent()
@@ -184,6 +185,7 @@ struct RoomWidgetView: View {
       icon: .symbol("fan.fill"),
       accent: .cyan,
       reading: entry.room.fanReading,
+      failed: entry.room.fanFailed,
       compact: compact,
       onIntent: FanOnIntent(),
       offIntent: FanOffIntent()
@@ -197,6 +199,7 @@ struct RoomWidgetView: View {
       icon: .tube,
       accent: .amber,
       reading: entry.room.tubeReading,
+      failed: entry.room.tubeFailed,
       onIntent: TubeOnIntent(),
       offIntent: TubeOffIntent()
     )
@@ -207,19 +210,21 @@ struct RoomWidgetView: View {
   @ViewBuilder
   private var tubeBar: some View {
     let reading = entry.room.tubeReading
+    let failed = entry.room.tubeFailed
+    let note = failed ? ", last command not confirmed" : ""
 
     if reading.isOn {
-      Button(intent: TubeOffIntent()) { tubeBarBody(reading) }
+      Button(intent: TubeOffIntent()) { tubeBarBody(reading, failed: failed) }
         .buttonStyle(.plain)
-        .accessibilityLabel("Tube light, on")
+        .accessibilityLabel("Tube light, on" + note)
     } else {
-      Button(intent: TubeOnIntent()) { tubeBarBody(reading) }
+      Button(intent: TubeOnIntent()) { tubeBarBody(reading, failed: failed) }
         .buttonStyle(.plain)
-        .accessibilityLabel("Tube light, \(reading == .unknown ? "unknown" : "off")")
+        .accessibilityLabel("Tube light, \(reading == .unknown ? "unknown" : "off")" + note)
     }
   }
 
-  private func tubeBarBody(_ reading: DeviceReading) -> some View {
+  private func tubeBarBody(_ reading: DeviceReading, failed: Bool) -> some View {
     let style: TileAccent = reading.isOn ? .amber : .neutral
 
     return ZStack {
@@ -236,8 +241,12 @@ struct RoomWidgetView: View {
           .shadow(color: reading.isOn ? Color.white.opacity(0.55) : .clear, radius: 4)
 
         Spacer(minLength: 0)
+
+        if failed {
+          Self.failureMark.font(.system(size: 11, weight: .semibold))
+        }
       }
-      .padding(.leading, 14)
+      .padding(.horizontal, 14)
     }
     .frame(maxWidth: .infinity)
     .frame(height: 34)
@@ -251,6 +260,7 @@ struct RoomWidgetView: View {
       icon: .symbol("lightbulb.fill"),
       accent: .amber,
       reading: entry.room.lightsReading,
+      failed: entry.room.lightsFailed,
       onIntent: LightsOnIntent(),
       offIntent: LightsOffIntent()
     )
@@ -265,24 +275,26 @@ struct RoomWidgetView: View {
     icon: TileIcon,
     accent: TileAccent,
     reading: DeviceReading,
+    failed: Bool = false,
     compact: Bool = false,
     onIntent: On,
     offIntent: Off
   ) -> some View {
+    let value = (reading == .unknown ? "unknown" : reading.text) + (failed ? ", last command not confirmed" : "")
     if reading.isOn {
       Button(intent: offIntent) {
-        tileBody(name: name, icon: icon, accent: accent, reading: reading, compact: compact)
+        tileBody(name: name, icon: icon, accent: accent, reading: reading, failed: failed, compact: compact)
       }
       .buttonStyle(.plain)
       .accessibilityLabel(name)
-      .accessibilityValue(reading.text)
+      .accessibilityValue(value)
     } else {
       Button(intent: onIntent) {
-        tileBody(name: name, icon: icon, accent: accent, reading: reading, compact: compact)
+        tileBody(name: name, icon: icon, accent: accent, reading: reading, failed: failed, compact: compact)
       }
       .buttonStyle(.plain)
       .accessibilityLabel(name)
-      .accessibilityValue(reading == .unknown ? "unknown" : reading.text)
+      .accessibilityValue(value)
     }
   }
 
@@ -291,6 +303,7 @@ struct RoomWidgetView: View {
     icon: TileIcon,
     accent: TileAccent,
     reading: DeviceReading,
+    failed: Bool = false,
     compact: Bool = false
   ) -> some View {
     let style: TileAccent = reading.isOn ? accent : .neutral
@@ -308,16 +321,21 @@ struct RoomWidgetView: View {
 
         Spacer(minLength: 2)
 
-        Group {
-          switch icon {
-          case let .symbol(systemName):
-            Image(systemName: systemName).font(.system(size: isSmall ? 12 : 13, weight: .semibold))
-          case .tube:
-            // The same upright bar the app and the medium widget use.
-            Capsule().frame(width: 4.5, height: 14)
+        if failed {
+          // The last command was not confirmed: the value is a best guess.
+          Self.failureMark.font(.system(size: isSmall ? 12 : 13, weight: .semibold))
+        } else {
+          Group {
+            switch icon {
+            case let .symbol(systemName):
+              Image(systemName: systemName).font(.system(size: isSmall ? 12 : 13, weight: .semibold))
+            case .tube:
+              // The same upright bar the app and the medium widget use.
+              Capsule().frame(width: 4.5, height: 14)
+            }
           }
+          .foregroundStyle(reading.isOn ? style.label : Color.white.opacity(0.34))
         }
-        .foregroundStyle(reading.isOn ? style.label : Color.white.opacity(0.34))
       }
 
       Spacer(minLength: 4)
@@ -376,6 +394,12 @@ struct RoomWidgetView: View {
       .overlay(tileShape(leadingAligned ? tileRadius : 11).stroke(TileAccent.neutral.stroke, lineWidth: 1))
     }
     .buttonStyle(.plain)
+  }
+
+  /// Replaces a tile's icon when its last command was not confirmed.
+  private static var failureMark: some View {
+    Image(systemName: "exclamationmark.triangle.fill")
+      .foregroundStyle(Color(red: 1.0, green: 0.45, blue: 0.38))
   }
 
   private func tileShape(_ radius: CGFloat) -> RoundedRectangle {

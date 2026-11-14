@@ -24,6 +24,9 @@ struct RoomSnapshot: Codable, Sendable, Equatable {
   var observedAt: [String: Date]? = nil
   var commandedAt: [String: Date]? = nil
   var bulbs: [String: WizPilot]? = nil
+  /// Device keys ("ac", "fan", "tube", "bulb:<id>") whose last command was not
+  /// confirmed. Cleared the next time that device is commanded or read.
+  var failedAt: [String: Date]? = nil
 
   static let unknown = RoomSnapshot(ac: nil, lights: [:], updatedAt: nil, node: nil)
 
@@ -59,6 +62,11 @@ struct RoomSnapshot: Codable, Sendable, Equatable {
   var fanReading: DeviceReading {
     DeviceReading(isOn: node?.fan, value: "On")
   }
+
+  var acFailed: Bool { failedAt?["ac"] != nil }
+  var fanFailed: Bool { failedAt?["fan"] != nil }
+  var tubeFailed: Bool { failedAt?["tube"] != nil }
+  var lightsFailed: Bool { failedAt?.keys.contains { $0.hasPrefix("bulb:") } ?? false }
 
   /// Folds a reading into the node, filling only what it reports so a partial
   /// answer never erases a known relay.
@@ -263,6 +271,7 @@ enum RoomSnapshotStore {
         if keys != nil || changed {
           stamps[key] = observedAt
           if command { commands[key] = observedAt }
+          document.snapshot.failedAt?.removeValue(forKey: key)
           touched = true
         }
       }
@@ -270,6 +279,21 @@ enum RoomSnapshotStore {
       document.snapshot.observedAt = stamps
       document.snapshot.commandedAt = commands
       document.snapshot.updatedAt = stamps.values.max()
+      try? write(document)
+    }
+  }
+
+  /// Records that these devices' last command was not confirmed. Renews
+  /// freshness, so the widget draws the result at once instead of spending its
+  /// wake asking hardware that just failed to answer.
+  static func markFailed(keys: [String], at time: Date = Date()) {
+    guard !keys.isEmpty else { return }
+    coordinated {
+      var document = readDocument()
+      var failed = document.snapshot.failedAt ?? [:]
+      for key in keys { failed[key] = time }
+      document.snapshot.failedAt = failed
+      document.snapshot.updatedAt = max(document.snapshot.updatedAt ?? time, time)
       try? write(document)
     }
   }
