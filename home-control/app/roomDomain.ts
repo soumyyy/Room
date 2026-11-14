@@ -117,6 +117,10 @@ export const PRESETS: Preset[] = [
 ];
 
 
+// `hex` is what the app shows; `params` is what the bulb needs to look like it.
+// They differ on purpose: the bulbs' green and blue LEDs are far stronger than
+// red, so a swatch's small green or blue share turns red pink and yellow green
+// on the bulb. The params were tuned by eye on the room's bulbs.
 export const GROUP_COLOR_PRESETS: GroupColorPreset[] = [
   {
     id: 'warm-white',
@@ -144,60 +148,60 @@ export const GROUP_COLOR_PRESETS: GroupColorPreset[] = [
     name: 'Red',
     hex: '#ff3b30',
     kind: 'color',
-    params: { state: true, r: 255, g: 59, b: 48 },
+    params: { state: true, r: 255, g: 0, b: 0 },
   },
   {
     id: 'orange',
     name: 'Orange',
     hex: '#ff9500',
     kind: 'color',
-    params: { state: true, r: 255, g: 149, b: 0 },
+    params: { state: true, r: 255, g: 40, b: 0 },
   },
   {
     id: 'yellow',
     name: 'Yellow',
     hex: '#ffd60a',
     kind: 'color',
-    params: { state: true, r: 255, g: 214, b: 10 },
+    params: { state: true, r: 255, g: 110, b: 0 },
   },
   {
     id: 'green',
     name: 'Green',
     hex: '#30d158',
     kind: 'color',
-    params: { state: true, r: 48, g: 209, b: 88 },
+    params: { state: true, r: 0, g: 255, b: 0 },
   },
   {
     id: 'cyan',
     name: 'Cyan',
     hex: '#00c7be',
     kind: 'color',
-    params: { state: true, r: 0, g: 199, b: 190 },
+    params: { state: true, r: 0, g: 255, b: 200 },
   },
   {
     id: 'blue',
     name: 'Blue',
     hex: '#0a84ff',
     kind: 'color',
-    params: { state: true, r: 10, g: 132, b: 255 },
+    params: { state: true, r: 0, g: 0, b: 255 },
   },
   {
     id: 'purple',
     name: 'Purple',
     hex: '#bf5af2',
     kind: 'color',
-    params: { state: true, r: 191, g: 90, b: 242 },
+    params: { state: true, r: 150, g: 0, b: 255 },
   },
   {
     id: 'pink',
     name: 'Pink',
     hex: '#ff2d55',
     kind: 'color',
-    params: { state: true, r: 255, g: 45, b: 85 },
+    params: { state: true, r: 255, g: 0, b: 90 },
   },
-  // Pastels: #a7f0d2 is 167 of neutral white plus (0, 73, 43) of chroma.
+  // Pastels mix a colour with a white LED (c is cool white, w is warm white).
   // Sent as pure RGB the bulb lights only the colour LEDs and reads far more
-  // saturated than the swatch, so the shared component goes to the white LED.
+  // saturated than the swatch.
   {
     id: 'seafoam',
     name: 'Seafoam',
@@ -210,14 +214,14 @@ export const GROUP_COLOR_PRESETS: GroupColorPreset[] = [
     name: 'Lavender',
     hex: '#d2c8ff',
     kind: 'color',
-    params: { state: true, r: 10, g: 0, b: 55, c: 200 },
+    params: { state: true, r: 90, g: 0, b: 180, c: 120 },
   },
   {
     id: 'blush',
     name: 'Blush',
     hex: '#ffc6d8',
     kind: 'color',
-    params: { state: true, r: 57, g: 0, b: 18, w: 198 },
+    params: { state: true, r: 140, g: 0, b: 50, w: 150 },
   },
 ];
 

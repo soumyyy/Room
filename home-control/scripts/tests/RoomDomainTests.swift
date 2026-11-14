@@ -108,7 +108,7 @@ struct RoomDomainTests {
     section("config: light presets")
     check("fourteen presets", RoomConfig.lightPresets.count == 14)
     check("ids are unique", Set(RoomConfig.lightPresets.map(\.id)).count == RoomConfig.lightPresets.count)
-    check("a pastel drives the white channel", RoomConfig.preset(id: "blush")?.pilot.w == 198)
+    check("a pastel drives the white channel", RoomConfig.preset(id: "blush")?.pilot.w == 150)
     check("an unknown preset is nil", RoomConfig.preset(id: "chartreuse") == nil)
     check("every preset turns the bulb on", RoomConfig.lightPresets.allSatisfy { $0.pilot.state })
 

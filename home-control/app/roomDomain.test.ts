@@ -2,6 +2,7 @@
 // is the whole reason the screen's decisions can be checked at all.
 
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 import {
@@ -122,15 +123,26 @@ test('colour rows are never wider than the grid', () => {
   assert.equal(COLOR_ROWS.flat().length, GROUP_COLOR_PRESETS.filter((p) => p.kind === 'color').length);
 });
 
-test('every swatch matches the command it sends', () => {
+test('the widget and Siri send the same colours as the app', () => {
+  // RoomConfig.swift keeps its own copy of the presets for the widget and Siri.
+  const swift = readFileSync('ios/RoomWidgetShared/RoomConfig.swift', 'utf8');
+  for (const preset of GROUP_COLOR_PRESETS) {
+    const line = swift.match(new RegExp(`id: "${preset.id}"[^\\n]*WizPilot\\(([^)]*)\\)`));
+    assert.ok(line, `${preset.id} is missing from RoomConfig.swift`);
+    const native = Object.fromEntries(
+      [...line[1].matchAll(/(\w+): (\w+)/g)].map(([, key, value]) => [key, value === 'true' ? true : Number(value)]),
+    );
+    assert.deepEqual(native, preset.params, `${preset.id} differs between the app and the widget`);
+  }
+});
+
+test('colours light only the LEDs they need', () => {
+  // A stray green or blue share shows on these bulbs (red with b: 48 reads
+  // pink), so a saturated preset leaves at least one colour channel at zero.
   for (const preset of GROUP_COLOR_PRESETS) {
     if (preset.kind === 'white') continue;
-    const { r = 0, g = 0, b = 0, c, w } = preset.params as Record<string, number | undefined>;
-    const white = c ?? w ?? 0;
-    const hex = `#${[r + white, g + white, b + white]
-      .map((v) => v.toString(16).padStart(2, '0'))
-      .join('')}`;
-    assert.equal(hex, preset.hex, `${preset.id} swatch disagrees with its params`);
+    const { r = 0, g = 0, b = 0 } = preset.params as Record<string, number | undefined>;
+    assert.ok([r, g, b].includes(0), `${preset.id} lights all three colour LEDs`);
   }
 });
 

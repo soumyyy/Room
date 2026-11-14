@@ -222,22 +222,25 @@ enum RoomConfig {
   static let lightsOn = WizPilot(state: true, dimming: 100, temp: 4200)
   static let lightsOff = WizPilot(state: false)
 
-  /// Mirrors GROUP_COLOR_PRESETS in app/AppScreen.tsx — keep the two in step.
+  /// Mirrors GROUP_COLOR_PRESETS in app/roomDomain.ts — keep the two in step.
+  /// Tuned by eye on the bulbs, not copied from the swatches: their green and
+  /// blue LEDs are far stronger than red, so a screen colour's small green or
+  /// blue share turns red pink and yellow green.
   static let lightPresets: [LightPreset] = [
     .init(id: "warm-white", name: "Warm White", pilot: WizPilot(state: true, temp: 2700)),
     .init(id: "neutral-white", name: "Neutral", pilot: WizPilot(state: true, temp: 4200)),
     .init(id: "cool-white", name: "Cool White", pilot: WizPilot(state: true, temp: 6500)),
-    .init(id: "red", name: "Red", pilot: WizPilot(state: true, r: 255, g: 59, b: 48)),
-    .init(id: "orange", name: "Orange", pilot: WizPilot(state: true, r: 255, g: 149, b: 0)),
-    .init(id: "yellow", name: "Yellow", pilot: WizPilot(state: true, r: 255, g: 214, b: 10)),
-    .init(id: "green", name: "Green", pilot: WizPilot(state: true, r: 48, g: 209, b: 88)),
-    .init(id: "cyan", name: "Cyan", pilot: WizPilot(state: true, r: 0, g: 199, b: 190)),
-    .init(id: "blue", name: "Blue", pilot: WizPilot(state: true, r: 10, g: 132, b: 255)),
-    .init(id: "purple", name: "Purple", pilot: WizPilot(state: true, r: 191, g: 90, b: 242)),
-    .init(id: "pink", name: "Pink", pilot: WizPilot(state: true, r: 255, g: 45, b: 85)),
+    .init(id: "red", name: "Red", pilot: WizPilot(state: true, r: 255, g: 0, b: 0)),
+    .init(id: "orange", name: "Orange", pilot: WizPilot(state: true, r: 255, g: 40, b: 0)),
+    .init(id: "yellow", name: "Yellow", pilot: WizPilot(state: true, r: 255, g: 110, b: 0)),
+    .init(id: "green", name: "Green", pilot: WizPilot(state: true, r: 0, g: 255, b: 0)),
+    .init(id: "cyan", name: "Cyan", pilot: WizPilot(state: true, r: 0, g: 255, b: 200)),
+    .init(id: "blue", name: "Blue", pilot: WizPilot(state: true, r: 0, g: 0, b: 255)),
+    .init(id: "purple", name: "Purple", pilot: WizPilot(state: true, r: 150, g: 0, b: 255)),
+    .init(id: "pink", name: "Pink", pilot: WizPilot(state: true, r: 255, g: 0, b: 90)),
     .init(id: "seafoam", name: "Seafoam", pilot: WizPilot(state: true, r: 0, g: 73, b: 43, c: 167)),
-    .init(id: "lavender", name: "Lavender", pilot: WizPilot(state: true, r: 10, g: 0, b: 55, c: 200)),
-    .init(id: "blush", name: "Blush", pilot: WizPilot(state: true, r: 57, g: 0, b: 18, w: 198)),
+    .init(id: "lavender", name: "Lavender", pilot: WizPilot(state: true, r: 90, g: 0, b: 180, c: 120)),
+    .init(id: "blush", name: "Blush", pilot: WizPilot(state: true, r: 140, g: 0, b: 50, w: 150)),
   ]
 
   /// Device keys as people say them: "AC, fan and Right Light 1".
