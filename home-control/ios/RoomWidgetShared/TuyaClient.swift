@@ -227,6 +227,19 @@ actor TuyaClient {
         expecting: Result.self,
         forceRefresh: false
       )
+    } catch let error as URLError where Self.isBriefDrop(error) {
+      // A widget, Siri or Control Center process often starts with the radio
+      // still waking, and its first request drops at once. One quick retry.
+      // An AC code carries the whole scene, so a duplicate send is harmless.
+      try await Task.sleep(nanoseconds: 400_000_000)
+      return try await performRequest(
+        method: method,
+        path: path,
+        query: query,
+        bodyData: bodyData,
+        expecting: Result.self,
+        forceRefresh: false
+      )
     } catch let error as NSError where error.domain == "RoomTuya" && (error.code == 1010 || error.code == 1011) {
       tokenCache = TuyaTokenCache()
       tokenCache.save()
@@ -239,6 +252,13 @@ actor TuyaClient {
         forceRefresh: true
       )
     }
+  }
+
+  /// Failures that are over in a moment. Not timeouts: retrying one would
+  /// double an already long wait.
+  private static func isBriefDrop(_ error: URLError) -> Bool {
+    [.networkConnectionLost, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed, .secureConnectionFailed]
+      .contains(error.code)
   }
 
   private func performRequest<Result: Decodable>(

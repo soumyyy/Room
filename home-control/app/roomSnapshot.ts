@@ -64,6 +64,24 @@ export function onRoomStateChanged(listener: () => void): () => void {
   }
 }
 
+/** Seconds between 1970 and 2001: Swift's JSONEncoder writes dates from 2001. */
+const SWIFT_DATE_OFFSET_S = 978_307_200;
+
+/**
+ * When the last AC command left from any process (app, widget, Siri, Control
+ * Center), in ms since 1970, or null. The IR blaster drops a code sent too
+ * soon after the previous one, wherever that one came from.
+ */
+export async function lastSharedAcCommandAt(): Promise<number | null> {
+  try {
+    const json = await bridge?.read?.();
+    const at = json ? (JSON.parse(json) as { commandedAt?: Record<string, number> }).commandedAt?.ac : undefined;
+    return typeof at === 'number' ? (at + SWIFT_DATE_OFFSET_S) * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
 export function recordAcScene(scene: {
   power: number;
   mode: number;

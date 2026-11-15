@@ -35,6 +35,7 @@ import {
   type NodeState,
 } from './roomDomain';
 import {
+  lastSharedAcCommandAt,
   logAction,
   readRoomSnapshot,
   recordAcScene,
@@ -378,7 +379,11 @@ export function useRoomController() {
     return operations.run(operation, async () => {
       let began = Date.now();
       try {
-        const wait = acNextSendAt.current - Date.now();
+        // Space from the last AC command anywhere: this app, or Siri, the
+        // widget or Control Center, which record theirs in the shared state.
+        const shared = await lastSharedAcCommandAt();
+        const nextAt = Math.max(acNextSendAt.current, shared === null ? 0 : shared + AC_COMMAND_GAP_MS);
+        const wait = Math.min(nextAt - Date.now(), AC_COMMAND_GAP_MS);
         if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
         began = Date.now();
         let accepted: boolean;

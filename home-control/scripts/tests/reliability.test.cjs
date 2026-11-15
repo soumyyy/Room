@@ -111,7 +111,7 @@ function controllerHarness(overrides = {}) {
   };
   const sent = [], nodeSent = [], records = [], logged = [];
   const snapshot = {
-    readRoomSnapshot: async () => null, readSceneReport: async () => null,
+    readRoomSnapshot: async () => null, readSceneReport: async () => null, lastSharedAcCommandAt: async () => null,
     logAction: (action, startedAt, error) => logged.push({ action, startedAt, error }),
     recordAcScene: (scene) => records.push(scene), recordNodeChange() {}, recordBulbReadings() {}, recordLightCommand() {},
     ...overrides.snapshot,
@@ -183,6 +183,25 @@ test('AC commands wait for the gap after the previous one', async () => {
   assert.equal(h.clock.timers.size, 1);
   await settle(h, second);
   assert.equal(h.sent.length, 2);
+});
+
+test('AC commands also wait after one sent by Siri or the widget', async () => {
+  // Another process sent an AC command just now, recorded in the shared state.
+  const h = controllerHarness({ snapshot: { lastSharedAcCommandAt: async () => Date.now() } });
+  const pending = h.render().changeAc({ power: 1 });
+  await flush();
+  assert.equal(h.sent.length, 0, 'must not send straight after another process did');
+  assert.equal(h.clock.timers.size, 1);
+  await settle(h, pending);
+  assert.equal(h.sent.length, 1);
+});
+
+test('an old shared AC command does not delay the next one', async () => {
+  const h = controllerHarness({ snapshot: { lastSharedAcCommandAt: async () => Date.now() - 60_000 } });
+  const pending = h.render().changeAc({ power: 1 });
+  await flush();
+  assert.equal(h.sent.length, 1);
+  await settle(h, pending);
 });
 
 test('resend transmits the current scene unchanged', async () => {
