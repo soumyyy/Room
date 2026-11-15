@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, AppState } from 'react-native';
 import { DeviceOperations } from './deviceOperations';
-import { performRoomScene, readSceneReport, recordNodeChange, recordBulbReadings, type SceneReport, type StoredRoomSnapshot } from './roomSnapshot';
+import { onRoomStateChanged, performRoomScene, readSceneReport, recordNodeChange, recordBulbReadings, type SceneReport, type StoredRoomSnapshot } from './roomSnapshot';
 import { BULB_GROUPS, BULBS, type BulbGroupConfig } from './config';
 import {
   ALL_LIGHTS_GROUP,
@@ -759,6 +759,19 @@ export function useRoomController() {
   const refreshLatest = useRef(refreshRoom);
   refreshLatest.current = refreshRoom;
 
+  /// Redraws from the shared state, which Siri, the widget and Control Center
+  /// write the moment they act. Local and instant; devices with a command in
+  /// flight here are left alone (hydrate skips them).
+  async function syncFromShared() {
+    if (roomBusyRef.current) return;
+    const [snapshot, scene] = await Promise.all([readRoomSnapshot(), readSceneReport().catch(() => null)]);
+    if (!mounted.current || roomBusyRef.current) return;
+    hydrate(snapshot);
+    if (scene) acceptSceneReport(scene);
+  }
+  const syncLatest = useRef(syncFromShared);
+  syncLatest.current = syncFromShared;
+
   useEffect(() => {
     mounted.current = true;
     let disposed = false;
@@ -779,8 +792,16 @@ export function useRoomController() {
       }
     }
     void boot().catch((error) => { if (!disposed) showToast(String(error)); });
+    // Coming back: show what Siri or the widget already did, then ask the devices.
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void refreshLatest.current();
+      if (state === 'active') void syncLatest.current().finally(() => refreshLatest.current());
+    });
+    // While open: redraw as soon as another process changes the room. A scene
+    // writes several times in a burst, so wait for it to settle.
+    let syncTimer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribeShared = onRoomStateChanged(() => {
+      if (syncTimer) clearTimeout(syncTimer);
+      syncTimer = setTimeout(() => { syncTimer = null; void syncLatest.current(); }, 250);
     });
     const interval = setInterval(() => {
       if (AppState.currentState === 'active') void refreshLatest.current();
@@ -789,6 +810,8 @@ export function useRoomController() {
       disposed = true;
       mounted.current = false;
       subscription.remove();
+      unsubscribeShared();
+      if (syncTimer) clearTimeout(syncTimer);
       clearInterval(interval);
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
       if (nodeVerifyTimerRef.current) clearTimeout(nodeVerifyTimerRef.current);

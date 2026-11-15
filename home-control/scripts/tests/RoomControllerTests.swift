@@ -1,4 +1,5 @@
 import Foundation
+import notify
 
 enum RoomNetworkError: Error { case invalidResponse; case tuya(message: String); case wiz(message: String) }
 
@@ -41,6 +42,24 @@ actor WiZClient {
 
 @main struct RoomControllerTests {
   static func check(_ condition: Bool, _ message: String) { precondition(condition, message) }
+
+  /// Registers for the change signal, has a child process write, then checks
+  /// it fired. Polls with notify_check, which needs no run loop (async main
+  /// holds the main queue the CFNotificationCenter callback would need).
+  static func signalFromChildWrite() -> Bool {
+    var token: Int32 = 0
+    guard notify_register_check(RoomSnapshotStore.changedNotification, &token) == NOTIFY_STATUS_OK else { return false }
+    defer { notify_cancel(token) }
+    var fired: Int32 = 0
+    notify_check(token, &fired)  // The first check always reports a change.
+    let writer = Process()
+    writer.executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
+    writer.arguments = ["tube"]
+    guard (try? writer.run()) != nil else { return false }
+    writer.waitUntilExit()
+    notify_check(token, &fired)
+    return fired != 0
+  }
   static func main() async throws {
     if CommandLine.arguments.count > 1 {
       let key = CommandLine.arguments[1]
@@ -139,6 +158,8 @@ actor WiZClient {
       RoomActionLog.save(RoomActionRecord(id: "\(index)", at: Date(), action: "a", source: "test", milliseconds: 1))
     }
     check(RoomActionLog.entries().count == RoomActionLog.limit, "The log is capped")
+    // Every write signals open apps across processes (Darwin notification).
+    check(signalFromChildWrite(), "A write in another process signals this one")
     print("scene retries, saved restore state, per-device freshness and cross-process persistence: passed")
   }
 }

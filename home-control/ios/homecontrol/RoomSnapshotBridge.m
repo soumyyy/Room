@@ -1,6 +1,7 @@
 #import <React/RCTBridgeModule.h>
+#import <React/RCTEventEmitter.h>
 
-@interface RCT_EXTERN_MODULE (RoomSnapshotBridge, NSObject)
+@interface RCT_EXTERN_MODULE (RoomSnapshotBridge, RCTEventEmitter)
 
 RCT_EXTERN_METHOD(readScene:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)

@@ -1,4 +1,4 @@
-import { NativeModules } from 'react-native';
+import { NativeEventEmitter, NativeModules } from 'react-native';
 
 import { BULB_GROUPS } from './config';
 
@@ -47,6 +47,20 @@ export async function readRoomSnapshot(): Promise<StoredRoomSnapshot | null> {
     return json ? (JSON.parse(json) as StoredRoomSnapshot) : null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Calls `listener` whenever the shared room state changes in any process:
+ * Siri, the widget, Control Center or this app. Returns the unsubscribe.
+ */
+export function onRoomStateChanged(listener: () => void): () => void {
+  if (!bridge) return () => {};
+  try {
+    const subscription = new NativeEventEmitter(bridge as never).addListener('roomStateChanged', listener);
+    return () => subscription.remove();
+  } catch {
+    return () => {};
   }
 }
 

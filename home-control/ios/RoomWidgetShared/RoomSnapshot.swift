@@ -207,8 +207,15 @@ enum RoomSnapshotStore {
     return document
   }
 
+  /// Posted after every write, across processes, so an open app can redraw
+  /// at once when Siri, the widget or Control Center changes the room.
+  static let changedNotification = "org.name.homecontrol.room-state-changed"
+
   private static func write(_ document: Document) throws {
     try JSONEncoder().encode(document).write(to: file, options: .atomic)
+    CFNotificationCenterPostNotification(
+      CFNotificationCenterGetDarwinNotifyCenter(),
+      CFNotificationName(changedNotification as CFString), nil, nil, true)
   }
 
   static func load() -> RoomSnapshot { coordinated { readDocument().snapshot } }

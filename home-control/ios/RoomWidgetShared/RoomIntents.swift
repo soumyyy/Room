@@ -194,6 +194,37 @@ struct LeaveRoomIntent: AppIntent {
   }
 }
 
+/// The Lock Screen door's actions. They ask for Face ID while the phone is
+/// locked, so a tap from a pocket does nothing; Siri and the Home Screen
+/// widget keep the plain intents above, which never ask.
+@available(iOS 17.0, *)
+struct LockScreenEnterRoomIntent: AppIntent {
+  static let title: LocalizedStringResource = "Lock Screen Enter Room"
+  static let openAppWhenRun = false
+  static let isDiscoverable = false
+  static var authenticationPolicy: IntentAuthenticationPolicy { .requiresAuthentication }
+
+  func perform() async throws -> some IntentResult {
+    defer { RoomIntentSupport.reloadWidget() }
+    try await logged { try await RoomController.shared.enterRoom() }
+    return .result()
+  }
+}
+
+@available(iOS 17.0, *)
+struct LockScreenLeaveRoomIntent: AppIntent {
+  static let title: LocalizedStringResource = "Lock Screen Leave Room"
+  static let openAppWhenRun = false
+  static let isDiscoverable = false
+  static var authenticationPolicy: IntentAuthenticationPolicy { .requiresAuthentication }
+
+  func perform() async throws -> some IntentResult {
+    defer { RoomIntentSupport.reloadWidget() }
+    try await logged { try await RoomController.shared.leaveRoom() }
+    return .result()
+  }
+}
+
 // MARK: - Air conditioner
 
 @available(iOS 17.0, *)

@@ -440,11 +440,11 @@ struct RoomWidgetView: View {
   @ViewBuilder
   private var lockScreenDoor: some View {
     if occupied {
-      Button(intent: LeaveRoomIntent()) { lockScreenSymbol(open: true) }
+      Button(intent: LockScreenLeaveRoomIntent()) { lockScreenSymbol(open: true) }
         .buttonStyle(.plain)
         .accessibilityLabel("Leave Room")
     } else {
-      Button(intent: EnterRoomIntent()) { lockScreenSymbol(open: false) }
+      Button(intent: LockScreenEnterRoomIntent()) { lockScreenSymbol(open: false) }
         .buttonStyle(.plain)
         .accessibilityLabel("Enter Room")
     }

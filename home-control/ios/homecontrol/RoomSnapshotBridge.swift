@@ -1,5 +1,6 @@
 import Foundation
 import WidgetKit
+internal import React
 
 /// Lets the React Native app write into the same App Group snapshot the widget
 /// and Siri read, so a change made in the app is visible on the Home Screen.
@@ -8,8 +9,44 @@ import WidgetKit
 /// charged against the widget's refresh budget, which makes this the most
 /// reliable update path we have.
 @objc(RoomSnapshotBridge)
-final class RoomSnapshotBridge: NSObject {
-  @objc static func requiresMainQueueSetup() -> Bool { false }
+final class RoomSnapshotBridge: RCTEventEmitter {
+  @objc override static func requiresMainQueueSetup() -> Bool { false }
+
+  // MARK: - Live updates
+  //
+  // Siri, the widget and Control Center write the shared state from other
+  // processes. Each write posts a Darwin notification; while the screen
+  // listens, it becomes a "roomStateChanged" event.
+
+  static let changedEvent = "roomStateChanged"
+  private var observing = false
+
+  override func supportedEvents() -> [String]! { [Self.changedEvent] }
+
+  override func startObserving() {
+    guard !observing else { return }
+    observing = true
+    CFNotificationCenterAddObserver(
+      CFNotificationCenterGetDarwinNotifyCenter(),
+      Unmanaged.passUnretained(self).toOpaque(),
+      { _, observer, _, _, _ in
+        guard let observer else { return }
+        let bridge = Unmanaged<RoomSnapshotBridge>.fromOpaque(observer).takeUnretainedValue()
+        bridge.sendEvent(withName: RoomSnapshotBridge.changedEvent, body: nil)
+      },
+      RoomSnapshotStore.changedNotification as CFString, nil, .deliverImmediately)
+  }
+
+  override func stopObserving() {
+    guard observing else { return }
+    observing = false
+    CFNotificationCenterRemoveObserver(
+      CFNotificationCenterGetDarwinNotifyCenter(),
+      Unmanaged.passUnretained(self).toOpaque(),
+      CFNotificationName(RoomSnapshotStore.changedNotification as CFString), nil)
+  }
+
+  deinit { stopObserving() }
 
   @objc(readScene:reject:)
   func readScene(_ resolve: @escaping (Any?) -> Void, reject: @escaping (String?, String?, Error?) -> Void) {
