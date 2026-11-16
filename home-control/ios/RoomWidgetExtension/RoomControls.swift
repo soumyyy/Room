@@ -139,6 +139,7 @@ struct RoomSceneValue: ControlValueProvider {
 struct ACControlIntent: SetValueIntent {
   static let title: LocalizedStringResource = "Control Center AC"
   static let isDiscoverable = false
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
 
   @Parameter(title: "On")
   var value: Bool
@@ -156,6 +157,7 @@ struct ACControlIntent: SetValueIntent {
 struct LightsControlIntent: SetValueIntent {
   static let title: LocalizedStringResource = "Control Center Lights"
   static let isDiscoverable = false
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
 
   @Parameter(title: "On")
   var value: Bool
@@ -173,6 +175,7 @@ struct LightsControlIntent: SetValueIntent {
 struct FanControlIntent: SetValueIntent {
   static let title: LocalizedStringResource = "Control Center Fan"
   static let isDiscoverable = false
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
 
   @Parameter(title: "On")
   var value: Bool
@@ -188,6 +191,7 @@ struct FanControlIntent: SetValueIntent {
 struct TubeControlIntent: SetValueIntent {
   static let title: LocalizedStringResource = "Control Center Tube Light"
   static let isDiscoverable = false
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
 
   @Parameter(title: "On")
   var value: Bool
@@ -203,6 +207,7 @@ struct TubeControlIntent: SetValueIntent {
 struct RoomSceneControlIntent: SetValueIntent {
   static let title: LocalizedStringResource = "Control Center Room"
   static let isDiscoverable = false
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
 
   @Parameter(title: "In")
   var value: Bool

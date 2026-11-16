@@ -68,6 +68,20 @@ check(
   ['recordObservation:', 'performScene:', 'readScene:', 'logAction:'].every((name) => bridgeExports.includes(name)),
 );
 
+// Siri, widget and Control Center actions must never ask for Face ID; only the
+// Lock Screen door does, so a pocket tap can't fire it. Every intent declares
+// its policy explicitly rather than trusting the system default.
+for (const file of ['RoomWidgetShared/RoomIntents.swift', 'RoomWidgetExtension/RoomControls.swift']) {
+  const source = readFileSync(join(ios, file), 'utf8');
+  const intents = [...source.matchAll(/struct (\w+): (?:AppIntent|SetValueIntent) \{([\s\S]*?)\n\}/g)];
+  for (const [, name, body] of intents) {
+    const policy = /authenticationPolicy: IntentAuthenticationPolicy \{ \.(\w+) \}/.exec(body)?.[1];
+    const expected = name.startsWith('LockScreen') ? 'requiresAuthentication' : 'alwaysAllowed';
+    check(`${name} uses .${expected}`, policy === expected);
+  }
+  check(`${file} declares intents`, intents.length > 0);
+}
+
 if (failures.length) {
   console.error('\nnative wiring check FAILED:');
   for (const failure of failures) console.error(`  - ${failure}`);

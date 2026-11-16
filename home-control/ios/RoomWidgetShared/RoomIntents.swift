@@ -173,6 +173,7 @@ struct EnterRoomIntent: AppIntent {
   static let title: LocalizedStringResource = "Enter Room"
   static let openAppWhenRun = false
   static let isDiscoverable = true
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
 
   func perform() async throws -> some IntentResult & ProvidesDialog {
     defer { RoomIntentSupport.reloadWidget() }
@@ -186,6 +187,7 @@ struct LeaveRoomIntent: AppIntent {
   static let title: LocalizedStringResource = "Leave Room"
   static let openAppWhenRun = false
   static let isDiscoverable = true
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
 
   func perform() async throws -> some IntentResult & ProvidesDialog {
     defer { RoomIntentSupport.reloadWidget() }
@@ -232,6 +234,7 @@ struct ACOnIntent: AppIntent {
   static let title: LocalizedStringResource = "Turn AC On"
   static let openAppWhenRun = false
   static let isDiscoverable = true
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
 
   func perform() async throws -> some IntentResult {
     try await logged { try await RoomController.shared.acOn() }
@@ -245,6 +248,7 @@ struct ACOffIntent: AppIntent {
   static let title: LocalizedStringResource = "Turn AC Off"
   static let openAppWhenRun = false
   static let isDiscoverable = true
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
 
   func perform() async throws -> some IntentResult {
     try await logged { try await RoomController.shared.acOff() }
@@ -259,6 +263,7 @@ struct SetACPowerIntent: AppIntent {
   static let title: LocalizedStringResource = "Turn AC On or Off"
   static let openAppWhenRun = false
   static let isDiscoverable = true
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
   static var parameterSummary: some ParameterSummary {
     Summary("Turn the AC \(\.$power)")
   }
@@ -281,6 +286,7 @@ struct SetACTemperatureIntent: AppIntent {
   static let title: LocalizedStringResource = "Set AC Temperature"
   static let openAppWhenRun = false
   static let isDiscoverable = true
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
   static var parameterSummary: some ParameterSummary {
     Summary("Set the AC to \(\.$temperature)")
   }
@@ -313,6 +319,7 @@ struct AdjustACTemperatureIntent: AppIntent {
   static let title: LocalizedStringResource = "Make Room Warmer or Cooler"
   static let openAppWhenRun = false
   static let isDiscoverable = true
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
   static var parameterSummary: some ParameterSummary {
     Summary("Make the room \(\.$shift)")
   }
@@ -332,6 +339,7 @@ struct SetACModeIntent: AppIntent {
   static let title: LocalizedStringResource = "Set AC Mode"
   static let openAppWhenRun = false
   static let isDiscoverable = true
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
   static var parameterSummary: some ParameterSummary {
     Summary("Set the AC to \(\.$mode) mode")
   }
@@ -351,6 +359,7 @@ struct SetFanSpeedIntent: AppIntent {
   static let title: LocalizedStringResource = "Set AC Fan Speed"
   static let openAppWhenRun = false
   static let isDiscoverable = true
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
   static var parameterSummary: some ParameterSummary {
     Summary("Set the AC fan to \(\.$speed)")
   }
@@ -372,6 +381,7 @@ struct FanOnIntent: AppIntent {
   static let title: LocalizedStringResource = "Turn Fan On"
   static let openAppWhenRun = false
   static let isDiscoverable = true
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
 
   func perform() async throws -> some IntentResult {
     try await logged { try await RoomController.shared.setFan(true) }
@@ -385,6 +395,7 @@ struct FanOffIntent: AppIntent {
   static let title: LocalizedStringResource = "Turn Fan Off"
   static let openAppWhenRun = false
   static let isDiscoverable = true
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
 
   func perform() async throws -> some IntentResult {
     try await logged { try await RoomController.shared.setFan(false) }
@@ -398,6 +409,7 @@ struct TubeOnIntent: AppIntent {
   static let title: LocalizedStringResource = "Turn Tube Light On"
   static let openAppWhenRun = false
   static let isDiscoverable = true
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
 
   func perform() async throws -> some IntentResult {
     try await logged { try await RoomController.shared.setTube(true) }
@@ -411,6 +423,7 @@ struct TubeOffIntent: AppIntent {
   static let title: LocalizedStringResource = "Turn Tube Light Off"
   static let openAppWhenRun = false
   static let isDiscoverable = true
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
 
   func perform() async throws -> some IntentResult {
     try await logged { try await RoomController.shared.setTube(false) }
@@ -424,6 +437,7 @@ struct SetFanPowerIntent: AppIntent {
   static let title: LocalizedStringResource = "Turn Fan On or Off"
   static let openAppWhenRun = false
   static let isDiscoverable = true
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
   static var parameterSummary: some ParameterSummary {
     Summary("Turn the fan \(\.$power)")
   }
@@ -443,6 +457,7 @@ struct SetTubePowerIntent: AppIntent {
   static let title: LocalizedStringResource = "Turn Tube Light On or Off"
   static let openAppWhenRun = false
   static let isDiscoverable = true
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
   static var parameterSummary: some ParameterSummary {
     Summary("Turn the tube light \(\.$power)")
   }
@@ -464,6 +479,7 @@ struct LightsOnIntent: AppIntent {
   static let title: LocalizedStringResource = "Turn Lights On"
   static let openAppWhenRun = false
   static let isDiscoverable = true
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
   static var parameterSummary: some ParameterSummary {
     Summary("Turn on the \(\.$group) lights")
   }
@@ -483,6 +499,7 @@ struct LightsOffIntent: AppIntent {
   static let title: LocalizedStringResource = "Turn Lights Off"
   static let openAppWhenRun = false
   static let isDiscoverable = true
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
   static var parameterSummary: some ParameterSummary {
     Summary("Turn off the \(\.$group) lights")
   }
@@ -502,6 +519,7 @@ struct SetLightsIntent: AppIntent {
   static let title: LocalizedStringResource = "Set Lights"
   static let openAppWhenRun = false
   static let isDiscoverable = true
+  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
   static var parameterSummary: some ParameterSummary {
     Summary("Set the \(\.$group) lights to \(\.$setting)")
   }
