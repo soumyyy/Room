@@ -1,0 +1,14 @@
+[Unit]
+Description=Room scheduling service
+After=default.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/projects/room-scheduler
+EnvironmentFile=%h/projects/room-scheduler/.env
+ExecStart=/usr/bin/node src/server.mjs
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
