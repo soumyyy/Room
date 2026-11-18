@@ -93,3 +93,18 @@ own reinstall) failed with `Unable to resolve .../metro-runtime/src/modules/empt
   safe while Xcode or Metro is running.
 - Render SwiftUI to a PNG on the Mac to check a widget when there is no Simulator: compile the widget file
   plus the shared Swift files with a small `main.swift` that uses `ImageRenderer`.
+
+## Siri parameter prompts need explicit async branches
+
+Swift's `??` right-hand side is an autoclosure and cannot await an App Intents
+`requestValue` call. Use `if let` for the supplied parameter and an explicit
+`else { try await ...requestValue(...) }` for the prompt. Typecheck against the
+actual iOS SDK before relying on a Foundation-only test or Swift parse check.
+
+## Scheduled scenes need a separate cloud restore lifecycle
+
+A room scene can restore every cloud device successfully while local WiZ bulbs
+remain unavailable. Do not let those unsupported bulb steps keep cloud state
+permanently away: the next Leave must capture current cloud device settings.
+Keep the partial result and failure alert while advancing the supported-device
+restore lifecycle. Verify Leave → partial Enter → changed device → Leave.

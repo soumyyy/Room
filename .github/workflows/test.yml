@@ -4,13 +4,27 @@ on:
   push:
     paths:
       - 'home-control/**'
+      - 'scheduling-service/**'
       - '.github/workflows/test.yml'
   pull_request:
     paths:
       - 'home-control/**'
+      - 'scheduling-service/**'
       - '.github/workflows/test.yml'
 
 jobs:
+  scheduling:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scheduling-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm test
+
   test:
     runs-on: macos-latest
     defaults:

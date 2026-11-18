@@ -1,9 +1,10 @@
+import UserNotifications
 internal import Expo
 internal import React
 internal import ReactAppDependencyProvider
 
 @UIApplicationMain
-class AppDelegate: ExpoAppDelegate {
+class AppDelegate: ExpoAppDelegate, UNUserNotificationCenterDelegate {
   var window: UIWindow?
 
   var reactNativeDelegate: ExpoReactNativeFactoryDelegate?
@@ -20,9 +21,40 @@ class AppDelegate: ExpoAppDelegate {
     reactNativeDelegate = delegate
     reactNativeFactory = factory
 
+    UNUserNotificationCenter.current().delegate = self
+    UNUserNotificationCenter.current().getNotificationSettings { settings in
+      if settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional {
+        DispatchQueue.main.async { application.registerForRemoteNotifications() }
+      }
+    }
+
     // React Native starts in SceneDelegate: iOS 27 terminates any app built
     // with the iOS 27 SDK that has not adopted the UIScene lifecycle.
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  override func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+    super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
+    Task { await RoomScheduleClient.registerPush(deviceToken) }
+  }
+
+  func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+    completionHandler([.banner, .sound, .list])
+  }
+
+  func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void) {
+    let id = response.notification.request.content.userInfo["scheduleId"] as? String ?? ""
+    var components = URLComponents()
+    components.scheme = "homecontrol"
+    components.host = "schedules"
+    components.queryItems = [URLQueryItem(name: "scheduleId", value: id)]
+    if let url = components.url {
+      UserDefaults(suiteName: RoomConfig.appGroupID)?.set(url.absoluteString, forKey: "scheduleNotificationLink")
+      _ = RCTLinkingManager.application(UIApplication.shared, open: url, options: [:])
+    }
+    completionHandler()
   }
 
   // Linking API

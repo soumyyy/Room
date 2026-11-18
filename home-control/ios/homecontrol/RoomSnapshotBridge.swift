@@ -1,5 +1,7 @@
 import Foundation
 import WidgetKit
+import UserNotifications
+import UIKit
 internal import React
 
 /// Lets the React Native app write into the same App Group snapshot the widget
@@ -135,6 +137,91 @@ final class RoomSnapshotBridge: RCTEventEmitter {
   }
 
   @objc func clearActionLog() { RoomActionLog.clear() }
+
+  @objc(readScheduleSettings:reject:)
+  func readScheduleSettings(_ resolve: @escaping (Any?) -> Void, reject: @escaping (String?, String?, Error?) -> Void) {
+    UNUserNotificationCenter.current().getNotificationSettings { settings in
+      RoomScheduleClient.setNotificationStatus(Self.notificationStatus(settings.authorizationStatus))
+      do { resolve(try RoomScheduleClient.json(RoomScheduleClient.settings())) }
+      catch { reject("schedule_settings", error.localizedDescription, error) }
+    }
+  }
+
+  @objc(configureSchedules:resolve:reject:)
+  func configureSchedules(_ input: NSDictionary, resolve: @escaping (Any?) -> Void, reject: @escaping (String?, String?, Error?) -> Void) {
+    do {
+      try RoomScheduleClient.configure(input as? [String: Any] ?? [:])
+      Task { await RoomScheduleClient.registerSavedPush() }
+      resolve(try RoomScheduleClient.json(RoomScheduleClient.settings()))
+    } catch { reject("schedule_config", error.localizedDescription, error) }
+  }
+
+  @objc(listSchedules:reject:)
+  func listSchedules(_ resolve: @escaping (Any?) -> Void, reject: @escaping (String?, String?, Error?) -> Void) {
+    Task {
+      do { resolve(try RoomScheduleClient.json(try await RoomScheduleClient.list())) }
+      catch { reject("schedule_list", error.localizedDescription, error) }
+    }
+  }
+
+  @objc(createSchedule:resolve:reject:)
+  func createSchedule(_ input: NSDictionary, resolve: @escaping (Any?) -> Void, reject: @escaping (String?, String?, Error?) -> Void) {
+    Task {
+      do { resolve(try RoomScheduleClient.json(try await RoomScheduleClient.create(input as? [String: Any] ?? [:]))) }
+      catch { reject("schedule_create", error.localizedDescription, error) }
+    }
+  }
+
+  @objc(cancelSchedule:resolve:reject:)
+  func cancelSchedule(_ id: String, resolve: @escaping (Any?) -> Void, reject: @escaping (String?, String?, Error?) -> Void) {
+    Task {
+      do { resolve(try RoomScheduleClient.json(try await RoomScheduleClient.cancel(id))) }
+      catch { reject("schedule_cancel", error.localizedDescription, error) }
+    }
+  }
+
+  @objc(retrySchedule:resolve:reject:)
+  func retrySchedule(_ input: NSDictionary, resolve: @escaping (Any?) -> Void, reject: @escaping (String?, String?, Error?) -> Void) {
+    Task {
+      do { resolve(try RoomScheduleClient.json(try await RoomScheduleClient.retry(input as? [String: Any] ?? [:]))) }
+      catch { reject("schedule_retry", error.localizedDescription, error) }
+    }
+  }
+
+  @objc(editSchedule:resolve:reject:)
+  func editSchedule(_ input: NSDictionary, resolve: @escaping (Any?) -> Void, reject: @escaping (String?, String?, Error?) -> Void) {
+    Task {
+      do { resolve(try RoomScheduleClient.json(try await RoomScheduleClient.edit(input as? [String: Any] ?? [:]))) }
+      catch { reject("schedule_edit", error.localizedDescription, error) }
+    }
+  }
+
+  @objc(consumeScheduleNotification:reject:)
+  func consumeScheduleNotification(_ resolve: @escaping (Any?) -> Void, reject: @escaping (String?, String?, Error?) -> Void) {
+    resolve(RoomScheduleClient.consumeNotificationLink())
+  }
+
+  @objc(requestScheduleNotifications:reject:)
+  func requestScheduleNotifications(_ resolve: @escaping (Any?) -> Void, reject: @escaping (String?, String?, Error?) -> Void) {
+    Task {
+      do {
+        let allowed = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+        RoomScheduleClient.setNotificationStatus(allowed ? "authorized" : "denied")
+        if allowed { await MainActor.run { UIApplication.shared.registerForRemoteNotifications() } }
+        resolve(try RoomScheduleClient.json(RoomScheduleClient.settings()))
+      } catch { reject("schedule_notifications", error.localizedDescription, error) }
+    }
+  }
+
+  private static func notificationStatus(_ status: UNAuthorizationStatus) -> String {
+    switch status {
+    case .authorized: return "authorized"
+    case .denied: return "denied"
+    case .provisional: return "provisional"
+    case .ephemeral: return "ephemeral"
+    default: return "notDetermined"
+    }
+  }
 
   private func reload() {
     RoomIntentSupport.reloadWidget()

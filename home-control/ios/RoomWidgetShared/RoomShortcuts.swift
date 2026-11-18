@@ -113,29 +113,26 @@ struct RoomShortcutsProvider: AppShortcutsProvider {
     )
 
     AppShortcut(
-      intent: LightsOnIntent(),
+      intent: SetLightsPowerIntent(),
       phrases: [
-        "Turn on \(.applicationName) lights",
-        "Turn \(.applicationName) lights on",
-        "Switch on \(.applicationName) lights",
-        "Turn on the \(\.$group) lights in \(.applicationName)",
-        "Turn on \(.applicationName) \(\.$group) lights"
+        "Turn \(\.$power) \(.applicationName) lights",
+        "Turn \(.applicationName) lights \(\.$power)",
+        "Switch \(\.$power) \(.applicationName) lights"
       ],
-      shortTitle: "Lights On",
-      systemImageName: "lightbulb.2.fill"
+      shortTitle: "Lights On/Off",
+      systemImageName: "lightbulb.2"
     )
 
     AppShortcut(
-      intent: LightsOffIntent(),
+      intent: ManageRoomSchedulesIntent(),
       phrases: [
-        "Turn off \(.applicationName) lights",
-        "Turn \(.applicationName) lights off",
-        "Switch off \(.applicationName) lights",
-        "Turn off the \(\.$group) lights in \(.applicationName)",
-        "Turn off \(.applicationName) \(\.$group) lights"
+        "Schedule \(.applicationName)",
+        "Manage \(.applicationName) schedules",
+        "\(.applicationName) schedules",
+        "\(\.$operation) \(.applicationName) schedule"
       ],
-      shortTitle: "Lights Off",
-      systemImageName: "lightbulb.2"
+      shortTitle: "Schedules",
+      systemImageName: "clock"
     )
 
     AppShortcut(

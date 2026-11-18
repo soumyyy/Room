@@ -34,6 +34,8 @@
 		EAE04F6A16D68EADE5457F7B /* RoomWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A2F4F876812695AC375558 /* RoomWidget.swift */; };
 		C0A7120000000000000000C2 /* RoomControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A7120000000000000000C1 /* RoomControls.swift */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
+		A1C0DE000000000000000102 /* RoomScheduleClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE000000000000000101 /* RoomScheduleClient.swift */; };
+		A1C0DE000000000000000112 /* RoomScheduleIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE000000000000000111 /* RoomScheduleIntents.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -88,6 +90,8 @@
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = homecontrol/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* homecontrol-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "homecontrol-Bridging-Header.h"; path = "homecontrol/homecontrol-Bridging-Header.h"; sourceTree = "<group>"; };
+		A1C0DE000000000000000101 /* RoomScheduleClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomScheduleClient.swift; sourceTree = "<group>"; };
+		A1C0DE000000000000000111 /* RoomScheduleIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomScheduleIntents.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -221,6 +225,8 @@
 				67AADE6B4EA3C2E67B6863C5 /* RoomIntents.swift */,
 				A1C0DE0000000000000000C1 /* RoomSnapshot.swift */,
 				A1C0DE0000000000000000B1 /* RoomShortcuts.swift */,
+				A1C0DE000000000000000111 /* RoomScheduleIntents.swift */,
+				A1C0DE000000000000000101 /* RoomScheduleClient.swift */,
 				D8F019C8294AD618476C566A /* TuyaClient.swift */,
 				4C03EC9EAD47E87D0EE8F9D2 /* WiZClient.swift */,
 			);
@@ -447,6 +453,8 @@
 				A1C0DE0000000000000000A2 /* RoomController.swift in Sources */,
 				A1C0DE0000000000000000A3 /* RoomIntents.swift in Sources */,
 				A1C0DE0000000000000000B2 /* RoomShortcuts.swift in Sources */,
+				A1C0DE000000000000000112 /* RoomScheduleIntents.swift in Sources */,
+				A1C0DE000000000000000102 /* RoomScheduleClient.swift in Sources */,
 				A1C0DE0000000000000000C2 /* RoomSnapshot.swift in Sources */,
 				A1C0DE0000000000000000A4 /* TuyaClient.swift in Sources */,
 				A1C0DE0000000000000000A5 /* WiZClient.swift in Sources */,
@@ -487,6 +495,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = homecontrol/Room.entitlements;
+				ROOM_APNS_ENVIRONMENT = development;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 4W769MPDJ6;
 				ENABLE_BITCODE = NO;
@@ -526,6 +535,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = homecontrol/Room.entitlements;
+				ROOM_APNS_ENVIRONMENT = production;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 4W769MPDJ6;
 				INFOPLIST_FILE = homecontrol/Info.plist;

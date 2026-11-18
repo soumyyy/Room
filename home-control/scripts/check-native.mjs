@@ -29,6 +29,8 @@ for (const file of [
   'homecontrol/RoomSnapshotBridge.m',
   'RoomWidgetShared/RoomSnapshot.swift',
   'RoomWidgetShared/RoomShortcuts.swift',
+  'RoomWidgetShared/RoomScheduleClient.swift',
+  'RoomWidgetShared/RoomScheduleIntents.swift',
 ]) {
   check(`${file} exists`, existsSync(join(ios, file)));
 }
@@ -52,6 +54,8 @@ check(
   'RoomShortcuts.swift compiles into exactly one target',
   count('RoomShortcuts.swift in Sources */,') === 1,
 );
+check('schedule client compiles into the app only', count('RoomScheduleClient.swift in Sources */,') === 1);
+check('schedule intents compile into the app only', count('RoomScheduleIntents.swift in Sources */,') === 1);
 check('native bridge compiles into the app', count('RoomSnapshotBridge.m in Sources */,') === 1);
 check('RoomGenerated.swift compiles into both targets', count('RoomGenerated.swift in Sources */,') === 2);
 
@@ -65,18 +69,18 @@ check(
 
 check(
   'the bridge exports what the screen calls',
-  ['recordObservation:', 'performScene:', 'readScene:', 'logAction:'].every((name) => bridgeExports.includes(name)),
+  ['recordObservation:', 'performScene:', 'readScene:', 'logAction:', 'readScheduleSettings:', 'configureSchedules:', 'listSchedules:', 'createSchedule:', 'cancelSchedule:', 'editSchedule:', 'retrySchedule:', 'requestScheduleNotifications:', 'consumeScheduleNotification:'].every((name) => bridgeExports.includes(name)),
 );
 
 // Siri, widget and Control Center actions must never ask for Face ID; only the
 // Lock Screen door does, so a pocket tap can't fire it. Every intent declares
 // its policy explicitly rather than trusting the system default.
-for (const file of ['RoomWidgetShared/RoomIntents.swift', 'RoomWidgetExtension/RoomControls.swift']) {
+for (const file of ['RoomWidgetShared/RoomIntents.swift', 'RoomWidgetShared/RoomScheduleIntents.swift', 'RoomWidgetExtension/RoomControls.swift']) {
   const source = readFileSync(join(ios, file), 'utf8');
   const intents = [...source.matchAll(/struct (\w+): (?:AppIntent|SetValueIntent) \{([\s\S]*?)\n\}/g)];
   for (const [, name, body] of intents) {
     const policy = /authenticationPolicy: IntentAuthenticationPolicy \{ \.(\w+) \}/.exec(body)?.[1];
-    const expected = name.startsWith('LockScreen') ? 'requiresAuthentication' : 'alwaysAllowed';
+    const expected = (name.startsWith('LockScreen') || name === 'ManageRoomSchedulesIntent') ? 'requiresAuthentication' : 'alwaysAllowed';
     check(`${name} uses .${expected}`, policy === expected);
   }
   check(`${file} declares intents`, intents.length > 0);

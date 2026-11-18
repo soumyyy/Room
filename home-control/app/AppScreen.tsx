@@ -1,9 +1,11 @@
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React from 'react';
-import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Animated, Linking, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import ColorSheet from './components/ColorSheet';
 import DiagnosticsSheet from './components/DiagnosticsSheet';
+import SchedulesSheet from './components/SchedulesSheet';
+import { consumeScheduleNotification } from './schedules';
 import { CycleButton, FanGlyph, MergeButton, PowerButton, Segmented, StepButton, Temperature, Tile, TubeGlyph, ui } from './components/RoomUi';
 import { applyFont } from './fonts';
 import { clamp, theme } from './theme';
@@ -51,6 +53,17 @@ export default function AppScreen() {
   } = controller;
   const insets = useSafeAreaInsets();
   const [diagnosticsOpen, setDiagnosticsOpen] = React.useState(false);
+  const [schedulesOpen, setSchedulesOpen] = React.useState(false);
+  React.useEffect(() => {
+    let active = true;
+    const openScheduleURL = (url: string | null) => {
+      if (active && url?.startsWith('homecontrol://schedules')) setSchedulesOpen(true);
+    };
+    void Linking.getInitialURL().then(openScheduleURL).catch(() => {});
+    void consumeScheduleNotification().then((value) => { if (active && value) setSchedulesOpen(true); }).catch(() => {});
+    const listener = Linking.addEventListener('url', ({ url }) => openScheduleURL(url));
+    return () => { active = false; listener.remove(); };
+  }, []);
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
 
   const roomActionLabel = controller.sceneFailures.length
@@ -161,6 +174,21 @@ export default function AppScreen() {
 
       {/* ── AC: power, temperature, scene, mode and airflow ───────────── */}
       <View style={screen.acBlock}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Schedules and alerts"
+          accessibilityHint="Long press to open schedules."
+          accessibilityActions={[{ name: 'activate', label: 'Open schedules' }, { name: 'longpress', label: 'Open schedules' }]}
+          onAccessibilityAction={() => setSchedulesOpen(true)}
+          onLongPress={() => setSchedulesOpen(true)}
+          delayLongPress={600}
+          style={screen.scheduleButton}
+        >
+          <View accessible={false} style={screen.clockFace}>
+            <View style={screen.clockHour} />
+            <View style={screen.clockMinute} />
+          </View>
+        </Pressable>
         <PowerButton
           on={!!shown.power}
           available={acAvailable}
@@ -359,6 +387,8 @@ export default function AppScreen() {
         onClose={() => setColorSheetGroupId(null)}
       />
 
+      <SchedulesSheet visible={schedulesOpen} onClose={() => setSchedulesOpen(false)} onDiagnostics={() => { setSchedulesOpen(false); setTimeout(() => setDiagnosticsOpen(true), 350); }} />
+
       <DiagnosticsSheet visible={diagnosticsOpen} onClose={() => setDiagnosticsOpen(false)} />
 
       {/* ── Splash ────────────────────────────────────────────────────── */}
@@ -390,10 +420,14 @@ const screen = applyFont(StyleSheet.create({
     gap: theme.gap,
     position: 'relative',
   },
+  scheduleButton: { position: 'absolute', right: 0, top: 0, width: 44, height: 44, justifyContent: 'center', alignItems: 'center', zIndex: 1 },
+  clockFace: { width: 17, height: 17, borderRadius: 9, borderWidth: 1.3, borderColor: theme.mute },
+  clockHour: { position: 'absolute', left: 7, top: 3, width: 1.3, height: 5, backgroundColor: theme.mute },
+  clockMinute: { position: 'absolute', left: 7, top: 7, width: 4, height: 1.3, backgroundColor: theme.mute },
   acUnavailable: {
     position: 'absolute',
     right: 2,
-    top: 27,
+    top: 45,
     color: theme.dim,
     fontSize: 11,
     fontWeight: '600',
