@@ -1,3 +1,4 @@
+import AppIntents
 import UserNotifications
 internal import Expo
 internal import React
@@ -20,6 +21,10 @@ class AppDelegate: ExpoAppDelegate, UNUserNotificationCenterDelegate {
 
     reactNativeDelegate = delegate
     reactNativeFactory = factory
+
+    if #available(iOS 17.0, *) {
+      RoomShortcutsProvider.updateAppShortcutParameters()
+    }
 
     UNUserNotificationCenter.current().delegate = self
     UNUserNotificationCenter.current().getNotificationSettings { settings in

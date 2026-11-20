@@ -19,7 +19,6 @@ RCT_EXTERN_METHOD(readActionLog:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(clearActionLog)
 
 RCT_EXTERN_METHOD(readScheduleSettings:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
-RCT_EXTERN_METHOD(configureSchedules:(nonnull NSDictionary *)input resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(listSchedules:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(createSchedule:(nonnull NSDictionary *)input resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(cancelSchedule:(NSString *)identifier resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)

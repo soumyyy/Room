@@ -11,11 +11,10 @@ export type RoomSchedule = {
   status: 'scheduled' | 'running' | 'completed' | 'partial' | 'failed' | 'missed' | 'cancelled';
   results?: { device: string; status: string; error?: string }[];
 };
-export type ScheduleSettings = { url: string; configured: boolean; notificationStatus: string; pushRegistered: boolean };
+export type ScheduleSettings = { configured: boolean; notificationStatus: string; pushRegistered: boolean };
 export type ScheduleList = { schedules: RoomSchedule[]; capabilities: { cloudDevices: boolean; bulbs: boolean; pushConfigured: boolean } };
 type Bridge = {
   readScheduleSettings(): Promise<string>;
-  configureSchedules(settings: { url: string; token: string }): Promise<string>;
   listSchedules(): Promise<string>;
   createSchedule(payload: object): Promise<string>;
   cancelSchedule(id: string): Promise<string>;
@@ -31,9 +30,6 @@ function native(): Bridge {
 }
 function parse<T>(raw: string): T { return JSON.parse(raw) as T; }
 export async function readScheduleSettings() { return parse<ScheduleSettings>(await native().readScheduleSettings()); }
-export async function configureSchedules(url: string, token: string) {
-  return parse<ScheduleSettings>(await native().configureSchedules({ url: url.trim(), token: token.trim() }));
-}
 export async function listSchedules() { return parse<ScheduleList>(await native().listSchedules()); }
 export async function requestScheduleNotifications() { return parse<ScheduleSettings>(await native().requestScheduleNotifications()); }
 export async function consumeScheduleNotification() { return await native().consumeScheduleNotification(); }

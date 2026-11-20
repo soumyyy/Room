@@ -108,3 +108,24 @@ remain unavailable. Do not let those unsupported bulb steps keep cloud state
 permanently away: the next Leave must capture current cloud device settings.
 Keep the partial result and failure alert while advancing the supported-device
 restore lifecycle. Verify Leave → partial Enter → changed device → Leave.
+
+## APNs environment follows signing, not build optimization
+
+A Release build installed directly through Xcode can carry the development
+push entitlement. Check the signed app with `codesign -d --entitlements :-`
+and use the corresponding APNs endpoint. Keep the entitlement and the app's
+registration environment driven by the same build setting, and override it to
+production when signing for distribution.
+
+## Verify existing Siri phrases before replacing App Shortcut registrations
+
+The schedule rollout replaced the separate Lights On and Lights Off App
+Shortcuts and removed the phrases for individual light groups. Keep the known
+working provider as the baseline. Expose experimental scheduling actions in
+Shortcuts until the new voice entry and the existing commands have both been
+tested on the physical iPhone. A successful metadata build does not verify
+Siri routing.
+
+## Renewing Room’s Tuya IoT Core trial
+
+When Soumya asks how to renew IoT Core, give the [existing Room subscription](https://platform.tuya.com/cloud/products/detail?abilityId=1442730014117204014&id=p1776359624929ykj3hf&abilityAuth=0&tab=1) and tell them to renew the existing trial period. Skip the option to start a new trial.

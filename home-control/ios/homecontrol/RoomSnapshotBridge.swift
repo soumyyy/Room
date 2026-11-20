@@ -147,15 +147,6 @@ final class RoomSnapshotBridge: RCTEventEmitter {
     }
   }
 
-  @objc(configureSchedules:resolve:reject:)
-  func configureSchedules(_ input: NSDictionary, resolve: @escaping (Any?) -> Void, reject: @escaping (String?, String?, Error?) -> Void) {
-    do {
-      try RoomScheduleClient.configure(input as? [String: Any] ?? [:])
-      Task { await RoomScheduleClient.registerSavedPush() }
-      resolve(try RoomScheduleClient.json(RoomScheduleClient.settings()))
-    } catch { reject("schedule_config", error.localizedDescription, error) }
-  }
-
   @objc(listSchedules:reject:)
   func listSchedules(_ resolve: @escaping (Any?) -> Void, reject: @escaping (String?, String?, Error?) -> Void) {
     Task {

@@ -30,7 +30,7 @@ function readFile() {
   const path = join(homeControl, 'secrets.json');
   if (!existsSync(path)) return {};
   try {
-    return JSON.parse(readFileSync(path, 'utf8')).tuya ?? {};
+    return JSON.parse(readFileSync(path, 'utf8')) ?? {};
   } catch (error) {
     throw new Error(`secrets.json is not valid JSON: ${error.message}`);
   }
@@ -56,7 +56,7 @@ const node = devices.node ?? { id: '', name: '' };
 
 const fromFile = readFile();
 const tuya = Object.fromEntries(
-  FIELDS.map(([key, envName]) => [key, process.env[envName] ?? fromFile[key] ?? '']),
+  FIELDS.map(([key, envName]) => [key, process.env[envName] ?? fromFile.tuya?.[key] ?? '']),
 );
 
 const missing = FIELDS.map(([key]) => key).filter((key) => !tuya[key]);
@@ -93,7 +93,7 @@ export const NODE_GENERATED = ${JSON.stringify(node, null, 2)};
   },
   {
     path: join(homeControl, 'ios', 'RoomWidgetShared', 'RoomGenerated.swift'),
-    contents: swift(),
+    contents: swift(true),
   },
   {
     path: join(repoRoot, 'room-widget-mac', 'Sources', 'Shared', 'RoomGenerated.swift'),
@@ -118,7 +118,7 @@ ${FIELDS.map(([key]) => `    ${key}: ${q(tuya[key])},`).join('\n')}
   },
 ];
 
-function swift() {
+function swift(includeScheduler = false) {
   return `// ${BANNER}
 
 import Foundation
@@ -127,7 +127,12 @@ enum RoomSecrets {
 ${FIELDS.map(([key]) => `  static let ${key} = ${q(tuya[key])}`).join('\n')}
 }
 
-enum RoomDevices {
+${includeScheduler ? `enum RoomSchedulerConfig {
+  static let url = ${q(process.env.ROOM_SCHEDULER_URL ?? fromFile.scheduler?.url ?? '')}
+  static let token = ${q(process.env.ROOM_SCHEDULER_TOKEN ?? fromFile.scheduler?.token ?? '')}
+}
+
+` : ''}enum RoomDevices {
   static let bulbs: [(id: String, name: String, ip: String, group: String)] = [
 ${bulbs.map((b) => `    (id: ${q(b.id)}, name: ${q(b.name)}, ip: ${q(b.ip)}, group: ${q(b.group)}),`).join('\n')}
   ]

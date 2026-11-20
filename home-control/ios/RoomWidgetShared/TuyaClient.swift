@@ -4,8 +4,22 @@ import Foundation
 private struct TuyaEnvelope<Result: Decodable>: Decodable {
   let success: Bool
   let msg: String?
-  let code: String?
+  let code: Int?
   let result: Result?
+
+  private enum CodingKeys: String, CodingKey { case success, msg, code, result }
+
+  init(from decoder: Decoder) throws {
+    let fields = try decoder.container(keyedBy: CodingKeys.self)
+    success = try fields.decode(Bool.self, forKey: .success)
+    msg = try fields.decodeIfPresent(String.self, forKey: .msg)
+    if let number = try? fields.decode(Int.self, forKey: .code) {
+      code = number
+    } else {
+      code = (try? fields.decode(String.self, forKey: .code)).flatMap(Int.init)
+    }
+    result = success ? try fields.decodeIfPresent(Result.self, forKey: .result) : nil
+  }
 }
 
 private struct TuyaIgnoredResult: Decodable {
@@ -299,7 +313,7 @@ actor TuyaClient {
     guard http.statusCode < 400, envelope.success, let result = envelope.result else {
       let error = NSError(
         domain: "RoomTuya",
-        code: Int(envelope.code ?? "") ?? http.statusCode,
+        code: envelope.code ?? http.statusCode,
         userInfo: [NSLocalizedDescriptionKey: envelope.msg ?? "Tuya request failed."]
       )
       throw error

@@ -34,7 +34,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSMinimumSystemVersion</key>
@@ -50,6 +50,8 @@
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Room uses your local network to control WiZ lights.</string>
+	<key>RoomAPNSEnvironment</key>
+	<string>$(ROOM_APNS_ENVIRONMENT)</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

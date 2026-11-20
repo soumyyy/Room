@@ -1,16 +1,15 @@
 import Foundation
-import Security
 
 /// App and Siri use the same acknowledged cloud API. No phone timer executes jobs.
 enum RoomScheduleClient {
   #if ROOM_SCHEDULE_TESTS
   private static let defaults = UserDefaults(suiteName: "org.name.homecontrol.scheduler-tests")!
   static var testSession: URLSession?
-  private static var testToken: String?
+  static var testToken = ""
+  static var testURL = ""
   #else
   private static let defaults = UserDefaults(suiteName: RoomConfig.appGroupID) ?? .standard
   #endif
-  private static let credentialService = "org.name.homecontrol.scheduler"
   private static let redirectDelegate = ScheduleRedirectDelegate()
   private static let session = URLSession(configuration: {
     let config = URLSessionConfiguration.ephemeral
@@ -21,62 +20,27 @@ enum RoomScheduleClient {
 
   static var configured: Bool { baseURL != nil && token != nil }
   private static var baseURL: URL? {
-    guard let text = defaults.string(forKey: "scheduleServiceURL"), !text.isEmpty else { return nil }
-    return URL(string: text)
-  }
-  private static var token: String? {
     #if ROOM_SCHEDULE_TESTS
-    return testToken
+    let text = testURL
     #else
-    let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-      kSecAttrService as String: credentialService, kSecAttrAccount as String: "token",
-      kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
-    var result: CFTypeRef?
-    guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-      let data = result as? Data else { return nil }
-    return String(data: data, encoding: .utf8)
+    let text = RoomSchedulerConfig.url
     #endif
+    guard let url = URL(string: text), url.scheme == "https", url.host != nil,
+          url.user == nil, url.password == nil, url.query == nil, url.fragment == nil else { return nil }
+    return url
   }
 
-  static func configure(_ input: [String: Any]) throws {
-    let text = (input["url"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-    if text.isEmpty {
-      defaults.removeObject(forKey: "scheduleServiceURL")
-      #if ROOM_SCHEDULE_TESTS
-      testToken = nil
-      #else
-      SecItemDelete([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: credentialService,
-        kSecAttrAccount as String: "token"] as CFDictionary)
-      #endif
-      defaults.set(false, forKey: "schedulePushRegistered")
-      return
-    }
-    guard let url = URL(string: text), url.scheme == "https", url.host != nil,
-      url.user == nil, url.password == nil, url.query == nil, url.fragment == nil else {
-      throw ScheduleError("Use an HTTPS service URL without credentials or query parameters.")
-    }
-    let secret = (input["token"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-    let changedHost = text != defaults.string(forKey: "scheduleServiceURL")
-    guard !secret.isEmpty || (!changedHost && token != nil) else { throw ScheduleError("Enter the scheduler access token.") }
-    if !secret.isEmpty {
-      #if ROOM_SCHEDULE_TESTS
-      testToken = secret
-      #else
-      let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-        kSecAttrService as String: credentialService, kSecAttrAccount as String: "token"]
-      SecItemDelete(query as CFDictionary)
-      var record = query
-      record[kSecValueData as String] = Data(secret.utf8)
-      record[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-      guard SecItemAdd(record as CFDictionary, nil) == errSecSuccess else { throw ScheduleError("Couldn't securely save the scheduler token.") }
-      #endif
-    }
-    defaults.set(text, forKey: "scheduleServiceURL")
-    defaults.set(false, forKey: "schedulePushRegistered")
+  private static var token: String? {
+    #if ROOM_SCHEDULE_TESTS
+    let value = testToken
+    #else
+    let value = RoomSchedulerConfig.token
+    #endif
+    return value.isEmpty ? nil : value
   }
 
   static func settings() -> [String: Any] {
-    ["url": defaults.string(forKey: "scheduleServiceURL") ?? "", "configured": configured,
+    ["configured": configured,
       "notificationStatus": defaults.string(forKey: "scheduleNotificationStatus") ?? "notDetermined",
       "pushRegistered": defaults.bool(forKey: "schedulePushRegistered")]
   }
@@ -138,11 +102,8 @@ enum RoomScheduleClient {
   }
   static func registerSavedPush() async {
     guard configured, let saved = defaults.string(forKey: "schedulePushToken") else { return }
-    #if DEBUG
-    let environment = "sandbox"
-    #else
-    let environment = "production"
-    #endif
+    let signingEnvironment = Bundle.main.object(forInfoDictionaryKey: "RoomAPNSEnvironment") as? String
+    let environment = signingEnvironment == "production" ? "production" : "sandbox"
     do {
       _ = try await request("PUT", "v1/push-tokens", ["token": saved, "environment": environment])
       defaults.set(true, forKey: "schedulePushRegistered")
@@ -158,7 +119,7 @@ enum RoomScheduleClient {
     return try JSONSerialization.jsonObject(with: encoder.encode(value))
   }
   private static func request(_ method: String, _ path: String, _ body: [String: Any]? = nil) async throws -> [String: Any] {
-    guard let baseURL, let token else { throw ScheduleError("Set up cloud scheduling in Room's Schedules & Alerts sheet first.") }
+    guard let baseURL, let token else { throw ScheduleError("Scheduling is unavailable in this build.") }
     var req = URLRequest(url: baseURL.appendingPathComponent(path))
     req.httpMethod = method
     req.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")

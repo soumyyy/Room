@@ -69,7 +69,7 @@ check(
 
 check(
   'the bridge exports what the screen calls',
-  ['recordObservation:', 'performScene:', 'readScene:', 'logAction:', 'readScheduleSettings:', 'configureSchedules:', 'listSchedules:', 'createSchedule:', 'cancelSchedule:', 'editSchedule:', 'retrySchedule:', 'requestScheduleNotifications:', 'consumeScheduleNotification:'].every((name) => bridgeExports.includes(name)),
+  ['recordObservation:', 'performScene:', 'readScene:', 'logAction:', 'readScheduleSettings:', 'listSchedules:', 'createSchedule:', 'cancelSchedule:', 'editSchedule:', 'retrySchedule:', 'requestScheduleNotifications:', 'consumeScheduleNotification:'].every((name) => bridgeExports.includes(name)),
 );
 
 // Siri, widget and Control Center actions must never ask for Face ID; only the

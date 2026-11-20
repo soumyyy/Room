@@ -30,7 +30,7 @@ enum ScheduleRepeat: String, AppEnum {
   static let caseDisplayRepresentations: [Self: DisplayRepresentation] = [.none: "Once", .daily: "Every day", .weekdays: "Weekdays"]
 }
 
-/// One registration, with follow-up questions rather than unsupported multi-slot phrases.
+/// Available as a Shortcuts action. Automatic Siri registrations prioritize immediate controls.
 @available(iOS 17.0, *)
 struct ManageRoomSchedulesIntent: AppIntent {
   static let title: LocalizedStringResource = "Manage Room Schedules"
@@ -46,7 +46,7 @@ struct ManageRoomSchedulesIntent: AppIntent {
   @Parameter(title: "Schedule number") var number: Int?
 
   func perform() async throws -> some IntentResult & ProvidesDialog {
-    guard RoomScheduleClient.configured else { throw ScheduleError("Open Room's Schedules & Alerts sheet to connect cloud scheduling first.") }
+    guard RoomScheduleClient.configured else { throw ScheduleError("Scheduling is unavailable in this build.") }
     let op: ScheduleOperation
     if let value = operation { op = value }
     else { op = try await $operation.requestValue("Would you like to create, list, or cancel a schedule?") }
@@ -103,20 +103,5 @@ struct ManageRoomSchedulesIntent: AppIntent {
     _ = try await RoomScheduleClient.create(input)
     let formatted = runAt.formatted(date: .complete, time: .shortened)
     return .result(dialog: IntentDialog(stringLiteral: "Scheduled for \(formatted)\(repeatRule == .none ? "" : repeatRule == .daily ? ", repeating every day" : ", repeating on weekdays")."))
-  }
-}
-
-@available(iOS 17.0, *)
-struct SetLightsPowerIntent: AppIntent {
-  static let title: LocalizedStringResource = "Turn Lights On or Off"
-  static let openAppWhenRun = false
-  static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
-  @Parameter(title: "Power") var power: PowerState
-  @Parameter(title: "Lights", default: .all) var group: LightGroup
-  func perform() async throws -> some IntentResult & ProvidesDialog {
-    if power.isOn { try await RoomController.shared.lightsOn(group: group.configGroup) }
-    else { try await RoomController.shared.lightsOff(group: group.configGroup) }
-    RoomIntentSupport.reloadWidget()
-    return .result(dialog: power.isOn ? "Lights on." : "Lights off.")
   }
 }

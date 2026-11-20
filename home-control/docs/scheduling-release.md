@@ -14,9 +14,9 @@ Do not publish the scheduler access token, Tuya credentials, APNs signing key, o
 
 ## Connect the app
 
-1. Build `ios/homecontrol.xcworkspace` for your physical iPhone with push-capable signing.
-2. Long-press the small clock button to open **Schedules & Alerts**.
-3. Enter the HTTPS service URL and its access token in the sheet's setup controls.
+1. Set `scheduler.url` and `scheduler.token` in the ignored `home-control/secrets.json`, then run `npm run secrets` from `home-control`.
+2. Build `ios/homecontrol.xcworkspace` for your physical iPhone with push-capable signing.
+3. Long-press the clock to open **Schedules & Alerts**. The personal build connects automatically.
 4. Enable notifications and verify that push registration succeeds.
 5. Create a short fan or tube-light schedule and verify the action and history before relying on an overnight timer.
 

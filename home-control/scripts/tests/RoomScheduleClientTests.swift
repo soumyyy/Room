@@ -21,17 +21,14 @@ final class FakeScheduler: URLProtocol {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [FakeScheduler.self]
     RoomScheduleClient.testSession = URLSession(configuration: config)
-    defer { try? RoomScheduleClient.configure(["url":""]) }
-    try RoomScheduleClient.configure(["url":""])
-    do { try RoomScheduleClient.configure(["url":"http://example.test", "token":"secret"]); fatalError("HTTP must be rejected") }
-    catch is ScheduleError {}
-    try RoomScheduleClient.configure(["url":"https://example.test", "token":"test-secret"])
-    try RoomScheduleClient.configure(["url":"https://example.test", "token":""])
+    RoomScheduleClient.testToken = "test-secret"
+    RoomScheduleClient.testURL = "http://example.test"
+    precondition(!RoomScheduleClient.configured, "HTTP must be rejected")
+    RoomScheduleClient.testURL = "https://example.test"
+    precondition(RoomScheduleClient.configured)
     _ = try await RoomScheduleClient.list()
     precondition(FakeScheduler.seen.last?.value(forHTTPHeaderField: "Authorization") == "Bearer test-secret")
     precondition(FakeScheduler.seen.last?.url?.path == "/v1/schedules")
-    do { try RoomScheduleClient.configure(["url":"https://different.test", "token":""]); fatalError("New endpoint needs token") }
-    catch is ScheduleError {}
     precondition(!RoomScheduleClient.settings().keys.contains("token"))
     FakeScheduler.status = 503
     FakeScheduler.body = "{\"error\":\"Scheduler unavailable\"}"

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { applyFont } from '../fonts';
-import { actionLabel, cancelSchedule, configureSchedules, createSchedule, editSchedule, listSchedules, readScheduleSettings, requestScheduleNotifications, retrySchedule, recurrenceLabel, scheduleActions, type RoomSchedule, type ScheduleAction, type ScheduleList, type ScheduleRecurrence, type ScheduleSettings } from '../schedules';
+import { actionLabel, cancelSchedule, createSchedule, editSchedule, listSchedules, readScheduleSettings, requestScheduleNotifications, retrySchedule, recurrenceLabel, scheduleActions, type RoomSchedule, type ScheduleAction, type ScheduleList, type ScheduleRecurrence, type ScheduleSettings } from '../schedules';
 import { styles } from '../styles';
 import { theme } from '../theme';
 
@@ -20,9 +20,6 @@ export default function SchedulesSheet({ visible, onClose, onDiagnostics }: { vi
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [setup, setSetup] = useState(false);
-  const [url, setUrl] = useState('');
-  const [token, setToken] = useState('');
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<RoomSchedule | null>(null);
   const [action, setAction] = useState<ScheduleAction>('acOff');
@@ -43,11 +40,11 @@ export default function SchedulesSheet({ visible, onClose, onDiagnostics }: { vi
     try {
       const current = await readScheduleSettings();
       if (request !== generation.current) return;
-      setSettings(current); setUrl(current.url);
+      setSettings(current);
       if (current.configured) {
         const next = await listSchedules();
         if (request === generation.current) setData(next);
-      } else { setData(null); setSetup(true); }
+      } else { setData(null); }
     } catch (error) { if (request === generation.current) setError(messageOf(error)); }
     finally { if (request === generation.current) setBusy(false); }
   }, []);
@@ -149,26 +146,28 @@ export default function SchedulesSheet({ visible, onClose, onDiagnostics }: { vi
           <ScrollView style={local.scroll} contentContainerStyle={local.content} keyboardShouldPersistTaps="handled">
             <View style={local.row}>
               <Button label="Refresh" disabled={busy} onPress={() => void refresh()} />
-              <Button label={setup ? 'Hide setup' : 'Service setup'} disabled={busy} onPress={() => setSetup(!setup)} />
               {settings?.configured ? <Button label={adding ? 'Close form' : 'Add'} disabled={busy} onPress={() => { setAdding(!adding); setEditing(null); setRecurrence('none'); }} /> : null}
               {busy ? <ActivityIndicator color={theme.sand} /> : null}
             </View>
             {error ? <Text accessibilityRole="alert" style={local.error}>{error}{data ? ' Showing the last loaded schedules.' : ''}</Text> : null}
             {notice ? <Text accessibilityLiveRegion="polite" style={local.body}>{notice}</Text> : null}
-            {setup ? <View style={local.section}>
-              <Text style={local.heading}>Scheduling service</Text>
-              <Text style={local.caption}>Use your deployed Room scheduler. Saving a connection does not deploy a service.</Text>
-              <TextInput accessibilityLabel="Scheduling service URL" placeholder="https://scheduler.example.com" placeholderTextColor={theme.mute} value={url} onChangeText={setUrl} autoCapitalize="none" autoCorrect={false} keyboardType="url" editable={!busy} style={local.input} />
-              <TextInput accessibilityLabel="Scheduling service access token" placeholder={settings?.configured ? 'Token saved · leave blank to keep' : 'Access token'} placeholderTextColor={theme.mute} value={token} onChangeText={setToken} autoCapitalize="none" autoCorrect={false} secureTextEntry editable={!busy} style={local.input} />
-              <Button label="Save connection" disabled={busy || !url.trim() || (!settings?.configured && !token.trim())} onPress={() => void perform(async () => { await configureSchedules(url, token); setToken(''); setSetup(false); await refresh(); })} />
-            </View> : null}
             {settings?.configured ? <View style={local.section}>
-              <Text style={local.caption}>Failure alerts: {settings.notificationStatus || 'not requested'}{settings.pushRegistered ? ' · device registered' : ' · device not registered'}.</Text>
-              {data?.capabilities.pushConfigured === false ? <Text style={local.caption}>Server push delivery is not configured. Failures remain in Recent activity.</Text> : null}
-              <View style={local.row}>
-                <Button label="Enable failure alerts" disabled={busy} onPress={() => void perform(async () => { setSettings(await requestScheduleNotifications()); })} />
-                <Button label="Notification settings" disabled={busy} onPress={() => void Linking.openSettings().catch((error) => setError(messageOf(error)))} />
-              </View>
+              <Text style={local.caption}>{
+                data?.capabilities.pushConfigured === false
+                  ? 'Failure alerts are available in Recent activity. Push delivery is pending server setup.'
+                  : settings.notificationStatus === 'notDetermined'
+                    ? 'Allow notifications to receive failure alerts.'
+                    : settings.notificationStatus === 'denied'
+                      ? 'Notifications are off. You can allow them in iPhone Settings.'
+                      : settings.pushRegistered
+                        ? 'This iPhone is registered for failure alerts.'
+                        : 'Notifications are allowed. iPhone registration is pending.'
+              }</Text>
+              {data?.capabilities.pushConfigured !== false ? <View style={local.row}>
+                {settings.notificationStatus === 'denied'
+                  ? <Button label="Notification settings" disabled={busy} onPress={() => void Linking.openSettings()} />
+                  : <Button label={settings.notificationStatus === 'notDetermined' ? 'Enable failure alerts' : 'Register iPhone'} disabled={busy || settings.pushRegistered} onPress={() => void perform(async () => { setSettings(await requestScheduleNotifications()); })} />}
+              </View> : null}
             </View> : null}
             {adding && settings?.configured ? <View style={local.section}>
               <Text style={local.heading}>{editing ? `Edit ${actionLabel(editing.action)}` : 'New schedule'}</Text>
@@ -193,7 +192,7 @@ export default function SchedulesSheet({ visible, onClose, onDiagnostics }: { vi
               <Button label="Review schedule" disabled={busy} onPress={submit} />
             </View> : null}
             <Text style={local.heading}>Upcoming</Text>
-            {!upcoming.length ? <Text style={local.caption}>{settings?.configured ? 'No upcoming schedules.' : 'Connect the scheduling service to get started.'}</Text> : null}
+            {!upcoming.length ? <Text style={local.caption}>{settings?.configured ? 'No upcoming schedules.' : 'Scheduling is unavailable.'}</Text> : null}
             {upcoming.map((item) => <View key={item.id} style={local.item}>
               <Text style={local.body}>{actionLabel(item.action)}</Text>
               {item.message ? <Text style={local.caption}>{item.message}</Text> : null}

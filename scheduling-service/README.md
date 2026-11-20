@@ -33,7 +33,7 @@ systemctl --user status room-scheduler.service
 |---|---|
 | `ROOM_SCHEDULER_TOKEN` | Secret bearer token (≥24 chars). Use `openssl rand -base64 32`. |
 | `ROOM_SCHEDULER_DB` | Path to SQLite file (auto-created). |
-| `HOST` | Bind address. Use your Tailscale IP to keep it private to your devices. |
+| `HOST` | Bind address. Bind to `127.0.0.1` behind the HTTPS proxy. |
 | `PORT` | Port (default 8899). |
 | `ROOM_TUYA_CLIENT_ID` | Tuya project client ID. |
 | `ROOM_TUYA_CLIENT_SECRET` | Tuya project client secret. |
@@ -50,17 +50,20 @@ APNs is optional — schedules run fine without it, you just won't get push aler
 
 ## Configure the app
 
-In the Room app → Schedules & Alerts, enter:
-- **URL**: `http://<tailscale-ip>:8899` (e.g. `http://100.112.237.82:8899`)
-- **Token**: the value of `ROOM_SCHEDULER_TOKEN`
+On Eclipse, publish loopback port 8899 through Tailscale Funnel on HTTPS port
+10000. Funnel runs on the server. The iPhone connects directly over Wi-Fi or
+cellular. The scheduler requires a bearer token on every request. Set `scheduler.url` and
+`scheduler.token` in the ignored `home-control/secrets.json` before generating
+the app configuration with `npm run secrets` from `home-control`. The personal
+build connects automatically. Keep the build private because it contains the
+scheduler credential.
 
 ## Siri
 
-Say things like:
-- *"Turn off AC in 7 hours in Room"*
-- *"Leave Room at 10pm"*
-- *"Enter Room every day at 8am"*
-- *"Room schedules"* — to list or cancel
+Room registers its immediate device controls as App Shortcuts. To schedule
+through Siri, create a personal shortcut with Room’s **Manage Room Schedules**
+action and give it a distinctive name, such as **Room Voice**. Say that name
+to start the shortcut. Use the app’s clock menu to schedule without Siri.
 
 ## Run tests
 
