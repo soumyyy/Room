@@ -129,3 +129,16 @@ Siri routing.
 ## Renewing Room’s Tuya IoT Core trial
 
 When Soumya asks how to renew IoT Core, give the [existing Room subscription](https://platform.tuya.com/cloud/products/detail?abilityId=1442730014117204014&id=p1776359624929ykj3hf&abilityAuth=0&tab=1) and tell them to renew the existing trial period. Skip the option to start a new trial.
+
+## On iOS 27, Apple Home claims "Turn …" phrases about lights and the AC
+
+Siri voice commands stopped reaching Room while each shortcut still worked when tapped. The
+code was not the cause: with the schedule intent and `updateAppShortcutParameters()` compiled
+out, Siri still answered through Home. "Enter Room" worked, so Siri knew the app. Phrases that
+open with the app name ("Room AC off", "Room fan off") worked; "Turn off Room lights" went to
+Home. Fix: give every device shortcut a phrase that starts with `\(.applicationName)`.
+
+Diagnose in this order on the phone before editing phrases: does a non-device phrase ("Enter
+Room") work, and does an app-name-first phrase work? Removing the stale Room (Dev) install and
+compiling out new intents both changed nothing. Debug builds are now "Room Dev" anyway, so two
+installs never share a name.

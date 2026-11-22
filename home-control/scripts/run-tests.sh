@@ -50,7 +50,7 @@ swiftc -D ROOM_TESTS -o "$out/wiz-tests" \
   ios/RoomWidgetShared/RoomSnapshot.swift \
   ios/RoomWidgetShared/WiZClient.swift \
   scripts/tests/WizClientTests.swift
-"$out/wiz-tests"
+ROOM_HUB_DIR="$(cd .. && pwd)/room-hub" "$out/wiz-tests"
 
 # Native cloud client against an in-process HTTP protocol stub. No credentials or network.
 swiftc -D ROOM_SCHEDULE_TESTS -o "$out/schedule-tests" \

@@ -134,5 +134,61 @@ final class FakeBulb: @unchecked Sendable {
     check(WizPilot(state: false).applied(to: previous) == WizPilot(state: false, dimming: 40, r: 255, g: 0, b: 0), "Off keeps the rest")
 
     print("wiz bursts, readback retries, unconfirmed state and failure marks: passed")
+
+    // Room hub fallback, end to end: this WiZ client -> the real room-hub
+    // process -> UDP -> the same fake bulb.
+    guard let hubDir = ProcessInfo.processInfo.environment["ROOM_HUB_DIR"] else {
+      print("room hub fallback: skipped (ROOM_HUB_DIR not set)"); return
+    }
+    let token = String(repeating: "h", count: 32)
+    let port = 18_000 + Int.random(in: 0..<2000)
+    let devices = directory.appendingPathComponent("devices.json")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try #"{"bulbs":[{"id":"fake","name":"Fake","ip":"127.0.0.1","group":"left"}]}"#.write(to: devices, atomically: true, encoding: .utf8)
+    let hub = Process()
+    hub.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    hub.arguments = ["node", hubDir + "/src/server.mjs"]
+    hub.environment = ProcessInfo.processInfo.environment.merging([
+      "ROOM_HUB_TOKEN": token, "HOST": "127.0.0.1", "PORT": String(port),
+      "ROOM_HUB_DEVICES": devices.path, "ROOM_HUB_PROBE_MS": "600000",
+    ]) { $1 }
+    hub.standardOutput = FileHandle.nullDevice
+    try hub.run()
+    defer { hub.terminate() }
+    let base = "http://127.0.0.1:\(port)"
+    var up = false
+    for _ in 0..<50 where !up {
+      try await Task.sleep(nanoseconds: 100_000_000)
+      if let (_, response) = try? await URLSession.shared.data(from: URL(string: base + "/healthz")!),
+         (response as? HTTPURLResponse)?.statusCode == 200 { up = true }
+    }
+    check(up, "room-hub started")
+
+    // The phone misses every readback in its shorter budget; the hub, with the
+    // last dropped read behind it, confirms. The command must succeed.
+    RoomHub.settings = .init(lanURL: base, url: "", token: token)
+    RoomActionLog.clear()
+    bulb.configure(state: false, dropReads: 4)
+    try await WiZClient.shared.apply(on, to: [config])
+    check(bulb.state, "Hub landed the command")
+    check(!RoomSnapshotStore.load().lightsFailed, "Hub confirmation leaves no failure mark")
+    let hubEntry = RoomActionLog.entries().last { $0.source == "room hub" }
+    check(hubEntry != nil && hubEntry?.error == nil, "Hub retry is logged as a success")
+
+    // A silent bulb fails on both paths; the failure still surfaces.
+    bulb.configure(state: true, silent: true)
+    threw = false
+    do { try await WiZClient.shared.apply(off, to: [config]) } catch { threw = true }
+    check(threw && RoomSnapshotStore.load().lightsFailed, "Failure on both paths is still reported")
+
+    // Hub down: the phone's own result stands and the log says why.
+    RoomHub.settings = .init(lanURL: "http://127.0.0.1:1", url: "", token: token)
+    RoomActionLog.clear()
+    bulb.configure(state: true, silent: true)
+    threw = false
+    do { try await WiZClient.shared.apply(off, to: [config]) } catch { threw = true }
+    check(threw, "Unreachable hub does not hide the failure")
+    check(RoomActionLog.entries().contains { $0.error == "hub unreachable" }, "Unreachable hub is logged")
+    print("room hub fallback, end to end: passed")
   }
 }

@@ -59,6 +59,12 @@ const tuya = Object.fromEntries(
   FIELDS.map(([key, envName]) => [key, process.env[envName] ?? fromFile.tuya?.[key] ?? '']),
 );
 
+const hub = {
+  lanUrl: process.env.ROOM_HUB_LAN_URL ?? fromFile.hub?.lanUrl ?? '',
+  url: process.env.ROOM_HUB_URL ?? fromFile.hub?.url ?? '',
+  token: process.env.ROOM_HUB_TOKEN ?? fromFile.hub?.token ?? '',
+};
+
 const missing = FIELDS.map(([key]) => key).filter((key) => !tuya[key]);
 if (missing.length) {
   console.warn(
@@ -89,6 +95,9 @@ export const BULB_GROUPS_GENERATED = ${JSON.stringify(
     )};
 
 export const NODE_GENERATED = ${JSON.stringify(node, null, 2)};
+
+/** Room hub on the always-on laptop (room-hub/). Empty strings disable the fallback. */
+export const HUB_CONFIG = ${JSON.stringify(hub, null, 2)};
 `,
   },
   {
@@ -130,6 +139,13 @@ ${FIELDS.map(([key]) => `  static let ${key} = ${q(tuya[key])}`).join('\n')}
 ${includeScheduler ? `enum RoomSchedulerConfig {
   static let url = ${q(process.env.ROOM_SCHEDULER_URL ?? fromFile.scheduler?.url ?? '')}
   static let token = ${q(process.env.ROOM_SCHEDULER_TOKEN ?? fromFile.scheduler?.token ?? '')}
+}
+
+/// Room hub on the always-on laptop (room-hub/). Empty strings disable the fallback.
+enum RoomHubConfig {
+  static let lanURL = ${q(hub.lanUrl)}
+  static let url = ${q(hub.url)}
+  static let token = ${q(hub.token)}
 }
 
 ` : ''}enum RoomDevices {

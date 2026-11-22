@@ -4,6 +4,9 @@ import AppIntents
 // AppShortcutsProvider; building it into the widget extension as well made
 // both bundles claim the same Siri phrases.
 //
+// Phrases that open with the app name ("Room lights off") are the reliable
+// ones on iOS 27: Apple Home claims "Turn …" requests about lights and the AC.
+//
 // Apple allows at most ten shortcuts per app, and a phrase may name at most one
 // parameter. So on/off pairs are one shortcut with a power parameter
 // ("Turn Room fan off"), and brightness and colour share one "Set Room lights
@@ -106,7 +109,9 @@ struct RoomShortcutsProvider: AppShortcutsProvider {
         "Turn \(.applicationName) tube \(\.$power)",
         "Switch \(\.$power) \(.applicationName) tubelight",
         "Turn tubelight \(\.$power) in \(.applicationName)",
-        "\(.applicationName) tubelight \(\.$power)"
+        "\(.applicationName) tubelight \(\.$power)",
+        "\(.applicationName) tube light \(\.$power)",
+        "\(.applicationName) tube \(\.$power)"
       ],
       shortTitle: "Tube Light On/Off",
       systemImageName: "light.panel.fill"
@@ -119,7 +124,11 @@ struct RoomShortcutsProvider: AppShortcutsProvider {
         "Turn \(.applicationName) lights on",
         "Switch on \(.applicationName) lights",
         "Turn on the \(\.$group) lights in \(.applicationName)",
-        "Turn on \(.applicationName) \(\.$group) lights"
+        "Turn on \(.applicationName) \(\.$group) lights",
+        // iOS 27 hands "Turn …" light requests to Apple Home first; phrases
+        // that open with the app name still reach Room.
+        "\(.applicationName) lights on",
+        "\(.applicationName) \(\.$group) lights on"
       ],
       shortTitle: "Lights On",
       systemImageName: "lightbulb.2.fill"
@@ -132,7 +141,11 @@ struct RoomShortcutsProvider: AppShortcutsProvider {
         "Turn \(.applicationName) lights off",
         "Switch off \(.applicationName) lights",
         "Turn off the \(\.$group) lights in \(.applicationName)",
-        "Turn off \(.applicationName) \(\.$group) lights"
+        "Turn off \(.applicationName) \(\.$group) lights",
+        // iOS 27 hands "Turn …" light requests to Apple Home first; phrases
+        // that open with the app name still reach Room.
+        "\(.applicationName) lights off",
+        "\(.applicationName) \(\.$group) lights off"
       ],
       shortTitle: "Lights Off",
       systemImageName: "lightbulb.2"

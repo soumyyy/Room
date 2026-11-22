@@ -1,3 +1,33 @@
+# Room hub on omarchy — second line of defence (2026-11-22)
+
+omarchy (old laptop, always on, `ssh omarchy`, 192.168.29.215, Tailscale) shares the bulbs' Wi-Fi.
+Probe from it: all four bulbs answered 5/5 getPilot. Code in `room-hub/`, deployed to `~/room/` on the
+server; `room-hub/README.md` and `~/room/README.md` map every file.
+
+- [x] 1 · room-hub service: WiZ UDP with read-back confirmation, token auth, bulb probe every minute,
+      systemd user unit, deploy script, e2e tests (real HTTP + UDP, fake bulbs)
+- [x] 2 · Reachable on LAN (`http://192.168.29.215:8787`, ufw allows 192.168.29.0/24 only) and away
+      (`https://omarchy.tail3236bf.ts.net`, Tailscale Funnel). Both verified with and without token
+- [x] 3 · Phone fallback: widget/Siri/Control Center (`WiZClient.swift`) and app (`app/wizClient.ts`)
+      hand unconfirmed bulbs to the hub; phone budget 4.5 s → 2.5 s when the hub is configured.
+      Diagnostics gets a "room hub" entry per fallback. Swift e2e test runs the real hub process
+- [ ] 4 · On device: a light tap that the phone misses shows "Hub retried …" with no error in Diagnostics
+- [ ] 5 · Router: reserve 192.168.29.215 (omarchy) and the four bulb addresses
+- [ ] 6 · Fan/tube via Tuya LAN protocol on the hub, so an expired IoT Core trial or internet outage
+      no longer stops them
+- [ ] 7 · Scheduler on Eclipse calls the hub for bulb steps of scheduled Enter/Leave
+- [ ] 8 · Watchdog push: bulb unreachable for N minutes; Tuya "subscription has expired"
+
+# Siri opens Home instead of Room (2026-11-22)
+
+- Cause: iOS 27 routes "Turn …" light/AC requests to Apple Home. App-name-first phrases still
+  reach Room (verified by voice: "Room AC off", "Room fan off", "Room tubelight off", "Enter Room")
+- [x] Added "Room lights on/off", "Room <group> lights on/off", "Room tube light/tube on/off" (build 4)
+- [x] Dev build bundle and display name "Room Dev"; old Room (Dev) removed from the phone
+- [ ] Voice-test "Room lights off" and "Room left lights off" on build 4
+
+---
+
 # Room 1.3 — reliability, Siri, Alexa (planned 2026-11-12)
 
 Constraints: no always-on hub, no HomePod/Apple TV, no Echo yet. Siri phrases keep the app name

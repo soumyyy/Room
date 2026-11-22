@@ -150,6 +150,14 @@ enum RoomConfig {
   /// Total time one bulb gets to confirm a command. Bulbs are commanded in
   /// parallel, so this is also roughly how long a light intent can take.
   static let wizCommandBudget: TimeInterval = 4.5
+  /// With the room hub configured, the phone gives up sooner and hands the
+  /// unconfirmed bulbs to the hub, which has its own ~3 s budget.
+  static let wizBudgetBeforeHub: TimeInterval = 2.5
+  /// How long the hub's LAN address gets to answer before the phone assumes
+  /// it is away from home and uses the HTTPS address.
+  static let hubLanProbeTimeout: TimeInterval = 0.8
+  /// Covers the hub's own per-bulb budget plus the round trip.
+  static let hubRequestTimeout: TimeInterval = 5.0
   /// Each round sends the command this many times: setPilot is idempotent, and
   /// a phone just out of sleep often loses the first packet while it finds the
   /// bulb on the network.

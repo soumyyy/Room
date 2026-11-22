@@ -55,8 +55,38 @@ actor WiZClient {
       return collected
     }
 
-    guard let first = failures.first else { return }
-    for (bulb, delivered, _) in failures where delivered {
+    guard !failures.isEmpty else { return }
+
+    // Second line of defence: the hub in the room retries what the phone
+    // could not confirm. Its readings are real, so they replace assumptions.
+    var remaining = failures
+    if RoomHub.configured {
+      let hubBegan = Date()
+      let ids = failures.map { $0.0.id }
+      if let results = await RoomHub.apply(pilot, to: ids) {
+        let confirmed = Set(results.filter(\.confirmed).map(\.id))
+        for result in results {
+          guard let actual = result.actual else { continue }
+          RoomSnapshotStore.update(keys: ["bulb:" + result.id], observedAt: hubBegan) {
+            if $0.bulbs == nil { $0.bulbs = [:] }
+            $0.bulbs?[result.id] = actual
+          }
+        }
+        remaining.removeAll { confirmed.contains($0.0.id) }
+        RoomActionLog.save(RoomActionRecord(
+          id: UUID().uuidString, at: hubBegan, action: "Hub retried " + ids.joined(separator: ", "),
+          source: "room hub", milliseconds: Int(Date().timeIntervalSince(hubBegan) * 1000),
+          error: remaining.isEmpty ? nil : "still unconfirmed: " + remaining.map { $0.0.id }.joined(separator: ", ")))
+      } else {
+        RoomActionLog.save(RoomActionRecord(
+          id: UUID().uuidString, at: hubBegan, action: "Hub retried " + ids.joined(separator: ", "),
+          source: "room hub", milliseconds: Int(Date().timeIntervalSince(hubBegan) * 1000),
+          error: "hub unreachable"))
+      }
+    }
+
+    guard let first = remaining.first else { return }
+    for (bulb, delivered, _) in remaining where delivered {
       // Stamped with the command's start, so any real reading taken during
       // the attempt is newer and wins over this assumption.
       RoomSnapshotStore.update(keys: ["bulb:" + bulb.id], observedAt: began, command: true) {
@@ -65,7 +95,7 @@ actor WiZClient {
         $0.bulbs?[bulb.id] = assumed
       }
     }
-    RoomSnapshotStore.markFailed(keys: failures.map { "bulb:" + $0.0.id })
+    RoomSnapshotStore.markFailed(keys: remaining.map { "bulb:" + $0.0.id })
     throw first.2
   }
 
@@ -75,7 +105,7 @@ actor WiZClient {
   private func sendPilot(_ pilot: WizPilot, to bulb: BulbConfig, delivered: inout Bool) async throws {
     let host = bulb.ip
     let payload = try JSONEncoder().encode(WizEnvelope(method: "setPilot", params: pilot))
-    let deadline = Date().addingTimeInterval(RoomConfig.wizCommandBudget)
+    let deadline = Date().addingTimeInterval(RoomHub.configured ? RoomConfig.wizBudgetBeforeHub : RoomConfig.wizCommandBudget)
     var lastError: Error?
 
     func remaining() -> TimeInterval { deadline.timeIntervalSinceNow }
@@ -313,4 +343,64 @@ private struct WizGetPilotResponse: Decodable {
 private struct WizEnvelope<Params: Encodable>: Encodable {
   let method: String
   let params: Params
+}
+
+// MARK: - Room hub
+
+/// The always-on laptop in the room (room-hub/ in the repo). It sits on the
+/// bulbs' Wi-Fi, so it reaches bulbs the phone just missed, and it is the only
+/// way to reach them at all when the phone is away from home.
+enum RoomHub {
+  struct BulbResult: Decodable {
+    let id: String
+    let confirmed: Bool
+    let actual: WizPilot?
+    let error: String?
+  }
+
+  private struct Response: Decodable { let results: [BulbResult] }
+  private struct Request: Encodable { let pilot: WizPilot; let bulbs: [String] }
+
+  struct Settings { var lanURL: String; var url: String; var token: String }
+
+  #if ROOM_TESTS
+  /// Tests never reach the real hub; they opt in with a local one.
+  nonisolated(unsafe) static var settings = Settings(lanURL: "", url: "", token: "")
+  #else
+  static let settings = Settings(lanURL: RoomHubConfig.lanURL, url: RoomHubConfig.url, token: RoomHubConfig.token)
+  #endif
+
+  static var configured: Bool {
+    !settings.token.isEmpty && !(settings.lanURL.isEmpty && settings.url.isEmpty)
+  }
+
+  /// The LAN address when it answers quickly (works without internet),
+  /// otherwise the public HTTPS address.
+  private static func base() async -> String? {
+    let settings = settings
+    if !settings.lanURL.isEmpty, let url = URL(string: settings.lanURL + "/healthz") {
+      var request = URLRequest(url: url)
+      request.timeoutInterval = RoomConfig.hubLanProbeTimeout
+      if let (_, response) = try? await URLSession.shared.data(for: request),
+         (response as? HTTPURLResponse)?.statusCode == 200 {
+        return settings.lanURL
+      }
+    }
+    return settings.url.isEmpty ? nil : settings.url
+  }
+
+  /// Nil when the hub could not be reached or answered badly.
+  static func apply(_ pilot: WizPilot, to bulbIDs: [String]) async -> [BulbResult]? {
+    guard configured, let base = await base(), let url = URL(string: base + "/v1/lights") else { return nil }
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+    request.timeoutInterval = RoomConfig.hubRequestTimeout
+    request.setValue("Bearer " + settings.token, forHTTPHeaderField: "Authorization")
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue(RoomActionLog.currentSource, forHTTPHeaderField: "X-Room-Source")
+    request.httpBody = try? JSONEncoder().encode(Request(pilot: pilot, bulbs: bulbIDs))
+    guard let (data, response) = try? await URLSession.shared.data(for: request),
+          (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+    return (try? JSONDecoder().decode(Response.self, from: data))?.results
+  }
 }

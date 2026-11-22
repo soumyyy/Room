@@ -1,0 +1,15 @@
+[Unit]
+Description=Room hub: local WiZ bulb control for the Room app
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/room/hub
+EnvironmentFile=%h/room/config/hub.env
+ExecStart=/usr/bin/node src/server.mjs
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
