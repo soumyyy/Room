@@ -153,6 +153,7 @@ final class FakeBulb: @unchecked Sendable {
       "ROOM_HUB_DEVICES": devices.path, "ROOM_HUB_PROBE_MS": "600000",
     ]) { $1 }
     hub.standardOutput = FileHandle.nullDevice
+    hub.standardError = FileHandle.nullDevice
     try hub.run()
     defer { hub.terminate() }
     let base = "http://127.0.0.1:\(port)"
@@ -174,6 +175,11 @@ final class FakeBulb: @unchecked Sendable {
     check(!RoomSnapshotStore.load().lightsFailed, "Hub confirmation leaves no failure mark")
     let hubEntry = RoomActionLog.entries().last { $0.source == "room hub" }
     check(hubEntry != nil && hubEntry?.error == nil, "Hub retry is logged as a success")
+
+    // Status reads: the phone's read is lost (as away from home); the hub's is not.
+    bulb.configure(state: true, dropReads: 1)
+    let readings = await WiZClient.shared.readPilots([config])
+    check(readings["fake"]?.state == true, "Hub supplies the reading the phone missed")
 
     // A silent bulb fails on both paths; the failure still surfaces.
     bulb.configure(state: true, silent: true)

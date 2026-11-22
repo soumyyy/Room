@@ -51,6 +51,44 @@ function toPilot(params: Record<string, unknown>) {
   return pilot;
 }
 
+function toStatus(bulb: { id: string; ip: string }, a: NonNullable<HubResult['actual']>): WizPilotStatus {
+  return {
+    id: bulb.id,
+    ip: bulb.ip,
+    available: true,
+    isOn: a.state,
+    brightness: a.dimming ?? null,
+    temp: a.temp ?? null,
+    r: a.r ?? null,
+    g: a.g ?? null,
+    b: a.b ?? null,
+    c: a.c ?? null,
+    w: a.w ?? null,
+  };
+}
+
+/** Readings for the bulbs the hub can see, or null when the hub is unreachable. */
+export async function readViaHub(bulbs: { id: string; ip: string }[]): Promise<WizPilotStatus[] | null> {
+  if (!isHubConfigured() || !bulbs.length) return null;
+  const base = await hubBase();
+  if (!base) return null;
+  try {
+    const response = await fetchWithin(
+      base + '/v1/lights',
+      { headers: { Authorization: 'Bearer ' + HUB_CONFIG.token, 'X-Room-Source': 'app' } },
+      REQUEST_MS,
+    );
+    if (!response.ok) return null;
+    const { bulbs: readings } = (await response.json()) as { bulbs: Record<string, HubResult['actual']> };
+    return bulbs.flatMap((bulb) => {
+      const reading = readings[bulb.id];
+      return reading ? [toStatus(bulb, reading)] : [];
+    });
+  } catch {
+    return null;
+  }
+}
+
 /** Statuses for the bulbs the hub reached, or null when the hub is unreachable. */
 export async function applyViaHub(
   bulbs: { id: string; ip: string }[],
@@ -78,21 +116,7 @@ export async function applyViaHub(
     const { results } = (await response.json()) as { results: HubResult[] };
     const statuses = results.flatMap((result): WizPilotStatus[] => {
       const bulb = bulbs.find((candidate) => candidate.id === result.id);
-      if (!bulb || !result.actual) return [];
-      const a = result.actual;
-      return [{
-        id: bulb.id,
-        ip: bulb.ip,
-        available: true,
-        isOn: a.state,
-        brightness: a.dimming ?? null,
-        temp: a.temp ?? null,
-        r: a.r ?? null,
-        g: a.g ?? null,
-        b: a.b ?? null,
-        c: a.c ?? null,
-        w: a.w ?? null,
-      }];
+      return bulb && result.actual ? [toStatus(bulb, result.actual)] : [];
     });
     return { statuses, confirmedIds: results.filter((result) => result.confirmed).map((result) => result.id) };
   } catch {

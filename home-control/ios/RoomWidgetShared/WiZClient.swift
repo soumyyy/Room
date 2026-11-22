@@ -224,15 +224,20 @@ actor WiZClient {
   /// Asks every bulb what it is doing and folds the answers into per-group
   /// state. Bulbs that stay silent are simply absent from the result, so a
   /// group nobody answered for is left alone rather than reported off.
-  func readPilots() async -> [String: WizPilot] {
-    await withTaskGroup(of: (String, WizPilot?).self) { group in
-      for bulb in RoomConfig.bulbs {
+  func readPilots(_ bulbs: [BulbConfig] = RoomConfig.bulbs) async -> [String: WizPilot] {
+    let readings = await withTaskGroup(of: (String, WizPilot?).self) { group in
+      for bulb in bulbs {
         group.addTask { (bulb.id, try? await self.readPilot(from: bulb.ip)) }
       }
       var result: [String: WizPilot] = [:]
       for await (id, reading) in group { if let reading { result[id] = reading } }
       return result
     }
+    // Away from home the phone reaches no bulb; ask the hub in the room.
+    guard readings.count < bulbs.count, RoomHub.configured,
+          let viaHub = await RoomHub.read() else { return readings }
+    let wanted = Set(bulbs.map(\.id))
+    return readings.merging(viaHub.filter { wanted.contains($0.key) }) { phone, _ in phone }
   }
 
   private func readPilot(from host: String, timeout: TimeInterval = RoomConfig.wizSendTimeout) async throws -> WizPilot {
@@ -387,6 +392,21 @@ enum RoomHub {
       }
     }
     return settings.url.isEmpty ? nil : settings.url
+  }
+
+  private struct Readings: Decodable { let bulbs: [String: WizPilot?] }
+
+  /// Every bulb the hub can see. Nil when the hub could not be reached.
+  static func read() async -> [String: WizPilot]? {
+    guard configured, let base = await base(), let url = URL(string: base + "/v1/lights") else { return nil }
+    var request = URLRequest(url: url)
+    request.timeoutInterval = RoomConfig.hubRequestTimeout
+    request.setValue("Bearer " + settings.token, forHTTPHeaderField: "Authorization")
+    request.setValue(RoomActionLog.currentSource, forHTTPHeaderField: "X-Room-Source")
+    guard let (data, response) = try? await URLSession.shared.data(for: request),
+          (response as? HTTPURLResponse)?.statusCode == 200,
+          let decoded = try? JSONDecoder().decode(Readings.self, from: data) else { return nil }
+    return decoded.bulbs.compactMapValues { $0 }
   }
 
   /// Nil when the hub could not be reached or answered badly.

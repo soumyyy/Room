@@ -1,7 +1,7 @@
 import { NativeModules } from 'react-native';
 
 import type { BulbConfig } from './config';
-import { applyViaHub, isHubConfigured } from './roomHub';
+import { applyViaHub, isHubConfigured, readViaHub } from './roomHub';
 import type { WizCommandResult, WizPilotStatus } from './wizDirect';
 
 export type { WizCommandResult, WizPilotStatus } from './wizDirect';
@@ -20,13 +20,23 @@ export function isUsingDirectWiz() {
 
 export async function getWizStatuses(bulbs: BulbConfig[]): Promise<WizPilotStatus[]> {
   if (!hasDirectWizSupport()) {
+    const viaHub = await readViaHub(bulbs);
+    if (viaHub) return bulbs.map((bulb) => viaHub.find((status) => status.id === bulb.id) ?? { id: bulb.id, ip: bulb.ip, available: false, isOn: false, brightness: null, r: null, g: null, b: null, temp: null });
     throw new Error(
       'WiZ direct control is unavailable in this build. Reinstall a full native app build.',
     );
   }
 
   const direct = require('./wizDirect') as typeof import('./wizDirect');
-  return direct.getWizStatuses(bulbs);
+  const statuses = await direct.getWizStatuses(bulbs);
+  const silent = statuses.filter((status) => !status.available);
+  if (!silent.length || !isHubConfigured()) return statuses;
+
+  // Away from home the phone cannot reach any bulb; the hub in the room can.
+  const viaHub = await readViaHub(silent);
+  if (!viaHub?.length) return statuses;
+  const replaced = new Map(viaHub.map((status) => [status.id, status]));
+  return statuses.map((status) => replaced.get(status.id) ?? status);
 }
 
 export async function sendWizCommand(
