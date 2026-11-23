@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Deploys room-hub to the server and restarts it. Run from anywhere:
-#   room-hub/deploy/deploy.sh            # host defaults to "omarchy"
+#   room-hub/deploy/deploy.sh            # host defaults to "friday"
 #   ROOM_HUB_HOST=otherhost room-hub/deploy/deploy.sh
 #
 # Never edit files under ~/room/hub on the server: this script overwrites them.
 set -euo pipefail
 
-HOST="${ROOM_HUB_HOST:-omarchy}"
+HOST="${ROOM_HUB_HOST:-friday}"
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 

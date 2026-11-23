@@ -1,7 +1,7 @@
 # Room hub
 
 A small always-on service that controls the WiZ bulbs from inside the room. It runs on
-**omarchy**, the laptop in the room (`ssh omarchy`), which shares the bulbs' Wi-Fi.
+**friday**, the laptop in the room (`ssh friday`), which shares the bulbs' Wi-Fi.
 
 It is the second line of defence for the lights. The phone (app, widget, Siri, Control
 Center) still talks to the bulbs directly first. Any bulb the phone cannot confirm is
@@ -58,7 +58,7 @@ Pilot fields: `state` (required), `dimming`, `temp`, `r`, `g`, `b`, `c`, `w`. Op
 ```sh
 cd room-hub
 npm test                 # e2e tests, about 5 s
-deploy/deploy.sh         # tests, copy to omarchy, restart
+deploy/deploy.sh         # tests, copy to friday, restart
 ```
 
 The first deploy creates `~/room/config/hub.env` with a random token. Copy that token into
@@ -68,7 +68,7 @@ and rebuild the iPhone app.
 ## Operate
 
 ```sh
-ssh omarchy
+ssh friday
 systemctl --user status room-hub        # running?
 journalctl --user -u room-hub -f        # one line per light command
 TOKEN=$(grep ^ROOM_HUB_TOKEN ~/room/config/hub.env | cut -d= -f2)
@@ -76,7 +76,7 @@ curl -s -H "Authorization: Bearer $TOKEN" localhost:8787/v1/status | jq
 ```
 
 When a bulb's IP changes, edit `home-control/devices.json`, run `npm run secrets` there, and
-redeploy the hub. Better: reserve the bulbs' and omarchy's addresses in the router's DHCP
+redeploy the hub. Better: reserve the bulbs' and friday's addresses in the router's DHCP
 settings.
 
 ## Plan
@@ -85,7 +85,7 @@ Ordered by how many real failures each removes. The Diagnostics log from 20 Nove
 shows two failure kinds: bulbs not confirming (WiZ) and Tuya rejecting every command
 after the IoT Core trial expired.
 
-1. **Done:** hub on omarchy; phone falls back to it for unconfirmed bulbs.
+1. **Done:** hub on friday; phone falls back to it for unconfirmed bulbs.
 2. **Local fan and tube light.** The switchboard speaks Tuya's LAN protocol. With its local
    key (fetched once from the cloud API) the hub can switch it without Tuya cloud, so an
    expired trial or an internet outage no longer stops the fan and tube light. Same

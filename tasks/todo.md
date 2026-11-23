@@ -1,18 +1,18 @@
-# Room hub on omarchy — second line of defence (2026-11-22)
+# Room hub on friday — second line of defence (2026-11-22)
 
-omarchy (old laptop, always on, `ssh omarchy`, 192.168.29.215, Tailscale) shares the bulbs' Wi-Fi.
+friday (old laptop, always on, `ssh friday`, 192.168.29.215, Tailscale) shares the bulbs' Wi-Fi.
 Probe from it: all four bulbs answered 5/5 getPilot. Code in `room-hub/`, deployed to `~/room/` on the
 server; `room-hub/README.md` and `~/room/README.md` map every file.
 
 - [x] 1 · room-hub service: WiZ UDP with read-back confirmation, token auth, bulb probe every minute,
       systemd user unit, deploy script, e2e tests (real HTTP + UDP, fake bulbs)
 - [x] 2 · Reachable on LAN (`http://192.168.29.215:8787`, ufw allows 192.168.29.0/24 only) and away
-      (`https://omarchy.tail3236bf.ts.net`, Tailscale Funnel). Both verified with and without token
+      (`https://friday.tail3236bf.ts.net`, Tailscale Funnel). Both verified with and without token
 - [x] 3 · Phone fallback: widget/Siri/Control Center (`WiZClient.swift`) and app (`app/wizClient.ts`)
       hand unconfirmed bulbs to the hub; phone budget 4.5 s → 2.5 s when the hub is configured.
       Diagnostics gets a "room hub" entry per fallback. Swift e2e test runs the real hub process
 - [ ] 4 · On device: a light tap that the phone misses shows "Hub retried …" with no error in Diagnostics
-- [ ] 5 · Router: reserve 192.168.29.215 (omarchy) and the four bulb addresses
+- [ ] 5 · Router: reserve 192.168.29.215 (friday) and the four bulb addresses
 - [ ] 6 · Fan/tube via Tuya LAN protocol on the hub, so an expired IoT Core trial or internet outage
       no longer stops them
 - [ ] 7 · Scheduler on Eclipse calls the hub for bulb steps of scheduled Enter/Leave

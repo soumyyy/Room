@@ -1,4 +1,4 @@
-# ~/room — Room services on omarchy
+# ~/room — Room services on friday
 
 This laptop stays on in the room and acts as the backup controller for the Room app.
 Source lives in the Room repo on the Mac (`room-hub/`). Change it there and run
@@ -40,7 +40,7 @@ boot without a login.
 - LAN: `http://192.168.29.215:8787`. The firewall (ufw) allows 8787 from 192.168.29.0/24
   only. Reserve this address in the router so it does not move.
 - Away from home: Tailscale Funnel serves the hub over HTTPS at
-  `https://omarchy.tail3236bf.ts.net`. Every route except `/healthz` needs the token.
+  `https://friday.tail3236bf.ts.net`. Every route except `/healthz` needs the token.
 
 ## Keep it on
 
