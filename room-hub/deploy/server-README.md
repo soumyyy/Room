@@ -44,5 +44,6 @@ boot without a login.
 
 ## Keep it on
 
-- Lid close on mains power is ignored (`HandleLidSwitchExternalPower=ignore`).
-- Keep the charger connected. On battery, a lid close suspends the laptop and the hub stops.
+- Lid close never suspends, on mains or battery
+  (`/etc/systemd/logind.conf.d/90-devbox-lid.conf` sets `HandleLidSwitch*=ignore`).
+- Keep the charger connected anyway. On battery the hub runs until the battery dies.
